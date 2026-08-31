@@ -44,6 +44,7 @@ import {
   Excalidraw,
   Embed,
   TiptapPdf,
+  HtmlBlock,
   PageBreak,
   SearchAndReplace,
   Mention,
@@ -94,6 +95,7 @@ import DrawioView from "../components/drawio/drawio-view";
 import ExcalidrawView from "@/features/editor/components/excalidraw/excalidraw-view-lazy.tsx";
 import EmbedView from "@/features/editor/components/embed/embed-view.tsx";
 import PdfView from "@/features/editor/components/pdf/pdf-view.tsx";
+import HtmlBlockView from "@/features/editor/components/html-block/html-block-view.tsx";
 import SubpagesView from "@/features/editor/components/subpages/subpages-view.tsx";
 import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
@@ -245,7 +247,7 @@ export const mainExtensions = [
   TrailingNode,
   GlobalDragHandle.configure({
     customNodes: ["transclusionSource", "transclusionReference"],
-    atomNodes: ["base"],
+    atomNodes: ["base", "htmlBlock"],
   }),
   TextStyle,
   Color,
@@ -399,6 +401,11 @@ export const mainExtensions = [
   BaseEmbedNode.extend({
     addNodeView() {
       return ReactNodeViewRenderer(BaseEmbedView);
+    },
+  }),
+  HtmlBlock.configure({
+    addNodeView() {
+      return ReactNodeViewRenderer(HtmlBlockView);
     },
   }),
   MarkdownClipboard.configure({

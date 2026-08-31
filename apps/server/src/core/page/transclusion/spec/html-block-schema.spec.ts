@@ -1,9 +1,7 @@
 import { generateJSON, generateHTML } from "@tiptap/html";
 import { addUniqueIdsToDoc, HtmlBlock } from "@docmost/editor-ext";
-import { extensions as coreExtensions } from "@tiptap/core";
 
 const tiptapExtensions = [
-  ...coreExtensions,
   HtmlBlock,
 ] as any;
 
