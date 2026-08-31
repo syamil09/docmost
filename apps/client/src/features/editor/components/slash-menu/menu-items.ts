@@ -165,6 +165,14 @@ const CommandGroups: SlashMenuGroupedItemsType = {
         editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
     },
     {
+      title: "HTML block",
+      description: "Embed custom HTML — write code or upload a file.",
+      searchTerms: ["html", "embed", "component", "widget", "iframe", "custom"],
+      icon: IconBrandHtml5,
+      command: ({ editor, range }: CommandProps) =>
+        editor.chain().focus().deleteRange(range).insertHtmlBlock().run(),
+    },
+    {
       title: "Divider",
       description: "Insert horizontal rule divider",
       searchTerms: ["horizontal rule", "hr"],

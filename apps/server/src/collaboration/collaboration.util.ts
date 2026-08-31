@@ -127,6 +127,7 @@ export const tiptapExtensions = [
   TransclusionSource,
   TransclusionReference,
   BaseEmbed,
+  HtmlBlock,
   Footnotes,
   Footnote,
   FootnoteReference,
