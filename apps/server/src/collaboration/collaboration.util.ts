@@ -46,6 +46,7 @@ import {
   TransclusionSource,
   TransclusionReference,
   BaseEmbed,
+  HtmlBlock,
   Footnotes,
   Footnote,
   FootnoteReference,

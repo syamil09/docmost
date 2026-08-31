@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { ActionIcon, Badge, Menu, Tooltip } from "@mantine/core";
 import {
   IconAppWindow,
+  IconBrandHtml5,
   IconCalendar,
   IconCaretRightFilled,
   IconChevronDown,
@@ -249,6 +250,14 @@ export const MoreInsertsGroup: FC<Props> = ({ editor, templateMode }) => {
           onClick={() => setEmbed("gsheets")}
         >
           Google Sheets
+        </Menu.Item>
+        <Menu.Item
+          leftSection={<IconBrandHtml5 size={16} />}
+          onClick={() =>
+            editor.chain().focus().insertHtmlBlock().run()
+          }
+        >
+          {t("HTML block")}
         </Menu.Item>
 
         <Menu.Divider />

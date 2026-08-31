@@ -193,6 +193,13 @@ export const defaultAsyncNodes: NodeSerializerAsync = {
   subpages() {},
   transclusionReference() {},
   base() {},
+  htmlBlock(state, node) {
+    const code = node.attrs?.code ?? "";
+    if (code) {
+      state.text(`[HTML]: ${code.replace(/\n/g, " ")}`);
+    }
+    state.closeBlock(node);
+  },
 };
 
 export const defaultMarks: MarkSerializer = {

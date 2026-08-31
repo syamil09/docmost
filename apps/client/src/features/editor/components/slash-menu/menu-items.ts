@@ -21,6 +21,8 @@ import {
   IconTypography,
   IconMenu4,
   IconPageBreak,
+  IconAppWindow,
+  IconBrandHtml5,
   IconCalendar,
   IconClock,
   IconAppWindow,
