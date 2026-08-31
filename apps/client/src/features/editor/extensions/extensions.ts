@@ -404,9 +404,7 @@ export const mainExtensions = [
     },
   }),
   HtmlBlock.configure({
-    addNodeView() {
-      return ReactNodeViewRenderer(HtmlBlockView);
-    },
+    view: HtmlBlockView,
   }),
   MarkdownClipboard.configure({
     transformPastedText: true,

@@ -25,7 +25,6 @@ import {
   IconBrandHtml5,
   IconCalendar,
   IconClock,
-  IconAppWindow,
   IconSitemap,
   IconColumns3,
   IconColumns2,
