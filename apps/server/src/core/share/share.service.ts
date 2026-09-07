@@ -12,10 +12,10 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { TokenService } from '../auth/services/token.service';
 import { jsonToNode } from '../../collaboration/collaboration.util';
 import {
-  getAttachmentIds,
   getProsemirrorContent,
   isAttachmentNode,
   removeMarkTypeFromDoc,
+  resolveAttachmentId,
 } from '../../common/helpers/prosemirror/utils';
 import { Node } from '@tiptap/pm/model';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
@@ -452,7 +452,19 @@ export class ShareService {
     workspaceId: string,
   ): Promise<Node | null> {
     const pmJson = getProsemirrorContent(content);
-    const attachmentIds = getAttachmentIds(pmJson);
+
+    // Includes ids resolved from a node's src/url as a fallback (not just
+    // the strict attachmentId attr) so legacy content that lost that attr
+    // still gets its attachment links minted a public share token below.
+    const attachmentIds: string[] = [];
+    const doc = jsonToNode(pmJson);
+    doc?.descendants((node: Node) => {
+      if (!isAttachmentNode(node.type.name)) return;
+      const attachmentId = resolveAttachmentId(node);
+      if (attachmentId && !attachmentIds.includes(attachmentId)) {
+        attachmentIds.push(attachmentId);
+      }
+    });
 
     const tokenMap = new Map<string, string>();
     await Promise.all(
@@ -466,10 +478,10 @@ export class ShareService {
       }),
     );
 
-    const doc = jsonToNode(pmJson);
     doc?.descendants((node: Node) => {
       if (!isAttachmentNode(node.type.name)) return;
-      const token = tokenMap.get(node.attrs.attachmentId);
+      const attachmentId = resolveAttachmentId(node);
+      const token = tokenMap.get(attachmentId);
       if (!token) return;
       updateAttachmentAttr(node, 'src', token);
       updateAttachmentAttr(node, 'url', token);

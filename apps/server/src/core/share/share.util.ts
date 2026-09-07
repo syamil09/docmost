@@ -1,4 +1,5 @@
 import { Node } from '@tiptap/pm/model';
+import { FILES_PATH_REGEX } from '../../common/helpers/prosemirror/utils';
 
 export function updateAttachmentAttr(
   node: Node,
@@ -6,17 +7,25 @@ export function updateAttachmentAttr(
   token: string,
 ) {
   const attrVal = node.attrs[attr];
-  if (
-    attrVal &&
-    (attrVal.startsWith('/files') || attrVal.startsWith('/api/files'))
-  ) {
-    // @ts-ignore
-    node.attrs[attr] = updateAttachmentUrl(attrVal, token);
-  }
+  if (typeof attrVal !== 'string') return;
+
+  const match = attrVal.match(FILES_PATH_REGEX);
+  if (!match) return;
+
+  // @ts-ignore
+  node.attrs[attr] = updateAttachmentUrl(attrVal, match[0], token);
 }
 
-function updateAttachmentUrl(src: string, jwtToken: string) {
-  const updatedSrc = src.replace('/files/', '/files/public/');
+function updateAttachmentUrl(
+  src: string,
+  matchedFilesSegment: string,
+  jwtToken: string,
+) {
+  const publicSegment = matchedFilesSegment.replace(
+    '/files/',
+    '/files/public/',
+  );
+  const updatedSrc = src.replace(matchedFilesSegment, publicSegment);
   const separator = updatedSrc.includes('?') ? '&' : '?';
   return `${updatedSrc}${separator}jwt=${jwtToken}`;
 }

@@ -125,6 +125,30 @@ export function getProsemirrorContent(content: any) {
 
 export { isAttachmentNode };
 
+// matches "/files/<uuid>" or "/api/files/<uuid>" in either a relative path
+// or an absolute URL, so nodes whose attachmentId attr is absent (src-only)
+// can still be resolved from their src/url. Exported so share.util.ts can
+// anchor its public-URL rewrite on the same segment instead of matching
+// "/files/" anywhere in the string.
+export const FILES_PATH_REGEX =
+  /\/(?:api\/)?files\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?=[/?]|$)/;
+
+export function extractAttachmentIdFromUrl(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  const match = url.match(FILES_PATH_REGEX);
+  return match ? match[1] : null;
+}
+
+export function resolveAttachmentId(node: Node): string | null {
+  if (node.attrs.attachmentId && isValidUUID(node.attrs.attachmentId)) {
+    return node.attrs.attachmentId;
+  }
+  return (
+    extractAttachmentIdFromUrl(node.attrs.src) ??
+    extractAttachmentIdFromUrl(node.attrs.url)
+  );
+}
+
 export function getAttachmentIds(prosemirrorJson: any) {
   const doc = jsonToNode(prosemirrorJson);
   const attachmentIds = [];
