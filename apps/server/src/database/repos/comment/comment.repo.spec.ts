@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { KYSELY_MODULE_CONNECTION_TOKEN } from 'nestjs-kysely';
 import { CommentRepo } from './comment.repo';
 
 describe('CommentRepo', () => {
@@ -9,7 +10,7 @@ describe('CommentRepo', () => {
       providers: [
         CommentRepo,
         {
-          provide: 'KyselyDB',
+          provide: KYSELY_MODULE_CONNECTION_TOKEN(),
           useValue: { __fakeRepo: true },
         },
       ],
