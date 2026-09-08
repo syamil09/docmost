@@ -18,10 +18,17 @@ if (typeof window !== "undefined" && !window.matchMedia) {
 
 vi.mock("@mantine/hooks", () => ({
   useHover: () => ({ hovered: false, ref: () => null }),
-  useFocusWithin: () => ({ ref: () => null, focused: false }),
 }));
 
 vi.mock("@/features/comment/components/comment-editor", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/features/comment/components/comment-actions", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/features/comment/components/comment-menu", () => ({
   default: () => null,
 }));
 
