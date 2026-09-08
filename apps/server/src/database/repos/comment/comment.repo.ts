@@ -8,7 +8,10 @@ import {
   UpdatableComment,
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
-import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
+import {
+  emptyCursorPaginationResult,
+  executeWithCursorPagination,
+} from '@docmost/db/pagination/cursor-pagination';
 import { ExpressionBuilder } from 'kysely';
 import { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
@@ -46,6 +49,45 @@ export class CommentRepo {
       fields: [{ expression: 'id', direction: 'asc' }],
       parseCursor: (cursor) => ({ id: cursor.id }),
     });
+  }
+
+  async findAggregatedComments(pageIds: string[], pagination: PaginationOptions) {
+    if (!pageIds || pageIds.length === 0) {
+      return emptyCursorPaginationResult(pagination?.limit ?? 50);
+    }
+
+    const query = this.db
+      .selectFrom('comments')
+      .selectAll('comments')
+      .select((eb) => this.withCreator(eb))
+      .select((eb) => this.withResolvedBy(eb))
+      .select((eb) => this.withPage(eb))
+      .where('pageId', 'in', pageIds);
+
+    return executeWithCursorPagination(query, {
+      perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [{ expression: 'id', direction: 'asc' }],
+      parseCursor: (cursor) => ({ id: cursor.id }),
+    });
+  }
+
+  withPage(eb: ExpressionBuilder<DB, 'comments'>) {
+    return jsonObjectFrom(
+      eb
+        .selectFrom('pages')
+        .innerJoin('spaces', 'spaces.id', 'pages.spaceId')
+        .select([
+          'pages.id',
+          'pages.slugId',
+          'pages.title',
+          'pages.icon',
+          'pages.spaceId',
+          'spaces.slug as spaceSlug',
+        ])
+        .whereRef('pages.id', '=', 'comments.pageId'),
+    ).as('page');
   }
 
   async updateComment(
