@@ -1,4 +1,4 @@
-import { Group, Text, Box, Badge, Anchor } from "@mantine/core";
+import { ActionIcon, Group, Text, Box, Badge, Anchor } from "@mantine/core";
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import classes from "./comment.module.css";
@@ -9,15 +9,13 @@ import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms";
 import { isEditorReady } from "@docmost/editor-ext";
 import CommentActions from "@/features/comment/components/comment-actions";
 import CommentMenu from "@/features/comment/components/comment-menu";
-import { useHasFeature } from "@/ee/hooks/use-feature";
-import { Feature } from "@/ee/features";
-import ResolveComment from "@/ee/comment/components/resolve-comment";
 import { useHover } from "@mantine/hooks";
+import { IconCircleCheck, IconCircleCheckFilled } from "@tabler/icons-react";
 import {
   useDeleteCommentMutation,
   useUpdateCommentMutation,
+  useResolveCommentMutation,
 } from "@/features/comment/queries/comment-query";
-import { useResolveCommentMutation } from "@/ee/comment/queries/comment-query";
 import { IComment } from "@/features/comment/types/comment.types";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
@@ -48,9 +46,8 @@ function CommentListItem({
     comment.pageId,
     pageId,
   );
-  const resolveCommentMutation = useResolveCommentMutation();
+  const resolveCommentMutation = useResolveCommentMutation(pageId);
   const [currentUser] = useAtom(currentUserAtom);
-  const canResolve = useHasFeature(Feature.COMMENT_RESOLUTION);
   const createdAtAgo = useTimeAgo(comment.createdAt);
 
   const sourcePage = comment.page;
@@ -98,8 +95,6 @@ function CommentListItem({
   }
 
   async function handleResolveComment() {
-    if (!canResolve) return;
-    
     try {
       const isResolved = comment.resolvedAt != null;
       
@@ -154,13 +149,22 @@ function CommentListItem({
             </Text>
 
             <div style={{ visibility: hovered ? "visible" : "hidden" }}>
-              {!comment.parentCommentId && canComment && canResolve && (
-                <ResolveComment
-                  editor={editor}
-                  commentId={comment.id}
-                  pageId={comment.pageId}
-                  resolvedAt={comment.resolvedAt}
-                />
+              {!comment.parentCommentId && canComment && (
+                <ActionIcon
+                  variant="subtle"
+                  color={comment.resolvedAt != null ? "green" : "gray"}
+                  size="sm"
+                  loading={resolveCommentMutation.isPending}
+                  disabled={resolveCommentMutation.isPending}
+                  onClick={handleResolveComment}
+                  title={comment.resolvedAt != null ? t("Re-open comment") : t("Resolve comment")}
+                >
+                  {comment.resolvedAt != null ? (
+                    <IconCircleCheckFilled size={18} />
+                  ) : (
+                    <IconCircleCheck size={18} />
+                  )}
+                </ActionIcon>
               )}
 
               {(currentUser?.user?.id === comment.creatorId || userSpaceRole === 'admin') && (
