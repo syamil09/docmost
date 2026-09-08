@@ -12,6 +12,8 @@ describe('CommentService', () => {
   const commentRepoStub = {
     findAggregatedComments: jest.fn(),
     findPageComments: jest.fn(),
+    findById: jest.fn(),
+    updateComment: jest.fn().mockResolvedValue(undefined),
   };
   const pageRepoStub = {
     getPageAndDescendantsExcludingRestricted: jest.fn(),
@@ -69,6 +71,80 @@ describe('CommentService', () => {
       expect(commentRepoStub.findAggregatedComments).not.toHaveBeenCalled();
       expect(result).toBeDefined();
       expect(result.items).toEqual([]);
+    });
+  });
+
+  describe('resolveComment', () => {
+    it('sets resolvedAt and resolvedById when resolving', async () => {
+      commentRepoStub.findById.mockResolvedValue({
+        id: 'c1',
+        pageId: 'p1',
+        spaceId: 's1',
+        workspaceId: 'w1',
+        resolvedAt: null,
+        resolvedById: null,
+        content: {},
+        creatorId: 'u1',
+      });
+      commentRepoStub.updateComment.mockResolvedValue(undefined);
+      commentRepoStub.findById.mockResolvedValueOnce({
+        id: 'c1',
+        pageId: 'p1',
+        spaceId: 's1',
+        workspaceId: 'w1',
+        resolvedAt: new Date(),
+        resolvedById: 'u2',
+        content: {},
+        creatorId: 'u1',
+      });
+
+      const result = await (service as any).resolveComment('c1', true, { id: 'u2', name: 'test', email: 'test@test.com', avatarUrl: null, createdAt: new Date(), updatedAt: new Date() } as any);
+
+      expect(commentRepoStub.updateComment).toHaveBeenCalledWith(
+        expect.objectContaining({ resolvedAt: expect.any(Date), resolvedById: 'u2' }),
+        'c1',
+      );
+      expect(wsServiceStub.emitCommentEvent).toHaveBeenCalledWith('s1', 'p1', {
+        operation: 'commentResolved',
+        commentId: 'c1',
+        resolved: true,
+      });
+    });
+
+    it('clears resolvedAt and resolvedById when re-opening', async () => {
+      commentRepoStub.findById.mockResolvedValue({
+        id: 'c1',
+        pageId: 'p1',
+        spaceId: 's1',
+        workspaceId: 'w1',
+        resolvedAt: new Date(),
+        resolvedById: 'u1',
+        content: {},
+        creatorId: 'u1',
+      });
+      commentRepoStub.updateComment.mockResolvedValue(undefined);
+      commentRepoStub.findById.mockResolvedValueOnce({
+        id: 'c1',
+        pageId: 'p1',
+        spaceId: 's1',
+        workspaceId: 'w1',
+        resolvedAt: null,
+        resolvedById: null,
+        content: {},
+        creatorId: 'u1',
+      });
+
+      const result = await (service as any).resolveComment('c1', false, { id: 'u1', name: 'test', email: 'test@test.com', avatarUrl: null, createdAt: new Date(), updatedAt: new Date() } as any);
+
+      expect(commentRepoStub.updateComment).toHaveBeenCalledWith(
+        expect.objectContaining({ resolvedAt: null, resolvedById: null }),
+        'c1',
+      );
+      expect(wsServiceStub.emitCommentEvent).toHaveBeenCalledWith('s1', 'p1', {
+        operation: 'commentResolved',
+        commentId: 'c1',
+        resolved: false,
+      });
     });
   });
 });
