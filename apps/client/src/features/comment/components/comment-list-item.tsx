@@ -1,5 +1,6 @@
-import { Group, Text, Box, Badge } from "@mantine/core";
+import { Group, Text, Box, Badge, Anchor } from "@mantine/core";
 import React, { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import classes from "./comment.module.css";
 import { useAtom, useAtomValue } from "jotai";
 import { useTimeAgo } from "@/hooks/use-time-ago";
@@ -42,12 +43,24 @@ function CommentListItem({
   const editor = useAtomValue(pageEditorAtom);
   const [content, setContent] = useState<string>(comment.content);
   const editContentRef = useRef<any>(null);
-  const updateCommentMutation = useUpdateCommentMutation();
-  const deleteCommentMutation = useDeleteCommentMutation(comment.pageId);
+  const updateCommentMutation = useUpdateCommentMutation(pageId);
+  const deleteCommentMutation = useDeleteCommentMutation(
+    comment.pageId,
+    pageId,
+  );
   const resolveCommentMutation = useResolveCommentMutation();
   const [currentUser] = useAtom(currentUserAtom);
   const canResolve = useHasFeature(Feature.COMMENT_RESOLUTION);
   const createdAtAgo = useTimeAgo(comment.createdAt);
+
+  const sourcePage = comment.page;
+  const isForeignPage =
+    !!sourcePage && sourcePage.id && sourcePage.id !== pageId;
+
+  const sourceHref =
+    isForeignPage && sourcePage?.slugId && sourcePage?.spaceSlug
+      ? `/s/${sourcePage.spaceSlug}/p/${sourcePage.slugId}`
+      : null;
 
   useEffect(() => {
     setContent(comment.content);
@@ -163,11 +176,30 @@ function CommentListItem({
             </div>
           </Group>
 
-          <Group gap="xs">
-            <Text size="xs" fw={500} c="dimmed">
-              {createdAtAgo}
-            </Text>
-          </Group>
+          <Text size="xs" fw={500} c="dimmed">
+            {createdAtAgo}
+          </Text>
+          {isForeignPage && sourcePage && (
+            <Box mt={4}>
+              {sourceHref ? (
+                <Anchor
+                  component={Link}
+                  to={sourceHref}
+                  size="xs"
+                  c="dimmed"
+                  fw={500}
+                >
+                  {sourcePage.icon ? `${sourcePage.icon} ` : ""}
+                  {sourcePage.title || t("Untitled")}
+                </Anchor>
+              ) : (
+                <Text size="xs" fw={500} c="dimmed">
+                  {sourcePage.icon ? `${sourcePage.icon} ` : ""}
+                  {sourcePage.title || t("Untitled")}
+                </Text>
+              )}
+            </Box>
+          )}
         </div>
       </Group>
 
