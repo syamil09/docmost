@@ -14,7 +14,10 @@ import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { Comment, Page, User } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
+import {
+  CursorPaginationResult,
+  emptyCursorPaginationResult,
+} from '@docmost/db/pagination/cursor-pagination';
 import { QueueJob, QueueName } from '../../integrations/queue/constants';
 import { extractUserMentionIdsFromJson } from '../../common/helpers/prosemirror/utils';
 import { ICommentNotificationJob } from '../../integrations/queue/constants/queue.interface';
@@ -158,6 +161,23 @@ export class CommentService {
     return this.commentRepo.findPageComments(pageId, pagination);
   }
 
+  async findByPageAndDescendants(pageId: string, pagination: PaginationOptions) {
+    const descendants = await this.pageRepo.getPageAndDescendantsExcludingRestricted(
+      pageId,
+      { includeContent: false },
+    );
+
+    const pageIds = descendants
+      .map((p) => p.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    if (pageIds.length === 0) {
+      return emptyCursorPaginationResult(pagination?.limit ?? 50);
+    }
+
+    return this.commentRepo.findAggregatedComments(pageIds, pagination);
+  }
+
   async update(
     comment: Comment,
     updateCommentDto: UpdateCommentDto,
@@ -201,6 +221,40 @@ export class CommentService {
       operation: 'commentUpdated',
       pageId: comment.pageId,
       comment,
+    });
+
+    return comment;
+  }
+
+  async resolveComment(commentId: string, resolved: boolean, user: User): Promise<Comment> {
+    const comment = await this.commentRepo.findById(commentId, {
+      includeCreator: true,
+      includeResolvedBy: true,
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const updatedAt = new Date();
+
+    await this.commentRepo.updateComment(
+      {
+        resolvedAt: resolved ? updatedAt : null,
+        resolvedById: resolved ? user.id : null,
+        updatedAt,
+      },
+      commentId,
+    );
+
+    comment.resolvedAt = resolved ? updatedAt : null;
+    comment.resolvedById = resolved ? user.id : null;
+    comment.updatedAt = updatedAt;
+
+    this.wsService.emitCommentEvent(comment.spaceId, comment.pageId, {
+      operation: 'commentResolved',
+      commentId: comment.id,
+      resolved,
     });
 
     return comment;

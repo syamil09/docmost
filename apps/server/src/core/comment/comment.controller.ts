@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { ResolveCommentDto } from './dto/resolve-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { PageIdDto, CommentIdDto } from './dto/comments.input';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -101,6 +102,24 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('aggregated')
+  async findAggregatedComments(
+    @Body() input: PageIdDto,
+    @Body()
+    pagination: PaginationOptions,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(input.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.validateCanView(page, user);
+
+    return this.commentService.findByPageAndDescendants(page.id, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('info')
   async findOne(@Body() input: CommentIdDto, @AuthUser() user: User) {
     const comment = await this.commentRepo.findById(input.commentId);
@@ -137,6 +156,31 @@ export class CommentController {
     await this.pageAccessService.validateCanComment(page, user, workspace.id);
 
     return this.commentService.update(comment, dto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('resolve')
+  async resolveComment(
+    @Body() dto: ResolveCommentDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const comment = await this.commentRepo.findById(dto.commentId, {
+      includeCreator: true,
+      includeResolvedBy: true,
+    });
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const page = await this.pageRepo.findById(comment.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.validateCanView(page, user);
+
+    return this.commentService.resolveComment(dto.commentId, dto.resolved, user);
   }
 
   @HttpCode(HttpStatus.OK)
