@@ -14,6 +14,7 @@ import {
 } from "@mantine/core";
 import CommentListItem from "@/features/comment/components/comment-list-item";
 import {
+  useAggregatedCommentsQuery,
   useCommentsQuery,
   useCreateCommentMutation,
 } from "@/features/comment/queries/comment-query";
@@ -40,7 +41,12 @@ function CommentListWithTabs() {
     isLoading: isCommentsLoading,
     isError,
   } = useCommentsQuery({ pageId: page?.id });
-  const createCommentMutation = useCreateCommentMutation();
+  const {
+    data: aggregatedComments,
+    isLoading: isAggregatedLoading,
+    isError: isAggregatedError,
+  } = useAggregatedCommentsQuery({ pageId: page?.id });
+  const createCommentMutation = useCreateCommentMutation(page?.id);
   const [isLoading, setIsLoading] = useState(false);
   const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
 
@@ -67,6 +73,13 @@ function CommentListWithTabs() {
 
     return { activeComments: active, resolvedComments: resolved };
   }, [comments]);
+
+  const allAggregatedParents = useMemo(() => {
+    if (!aggregatedComments?.items) return [];
+    return aggregatedComments.items.filter(
+      (comment: IComment) => comment.parentCommentId === null,
+    );
+  }, [aggregatedComments]);
 
   const [isPageCommentLoading, setIsPageCommentLoading] = useState(false);
 
@@ -117,7 +130,7 @@ function CommentListWithTabs() {
   );
 
   const renderComments = useCallback(
-    (comment: IComment) => (
+    (comment: IComment, sourceComments: IPagination<IComment> = comments) => (
       <Paper
         shadow="sm"
         radius="md"
@@ -135,7 +148,7 @@ function CommentListWithTabs() {
             userSpaceRole={space?.membership?.role}
           />
           <MemoizedChildComments
-            comments={comments}
+            comments={sourceComments}
             parentId={comment.id}
             pageId={page?.id}
             canComment={canComment}
@@ -143,7 +156,7 @@ function CommentListWithTabs() {
           />
         </div>
 
-        {!comment.resolvedAt && canComment && (
+        {!comment.resolvedAt && canComment && comment.pageId === page?.id && (
           <>
             <Divider my={4} />
             <CommentEditorWithActions
@@ -155,7 +168,15 @@ function CommentListWithTabs() {
         )}
       </Paper>
     ),
-    [comments, handleAddReply, isLoading, space?.membership?.role, canComment],
+    [
+      comments,
+      aggregatedComments,
+      handleAddReply,
+      isLoading,
+      space?.membership?.role,
+      canComment,
+      page?.id,
+    ],
   );
 
   if (isCommentsLoading) {
@@ -215,6 +236,16 @@ function CommentListWithTabs() {
           >
             {t("Resolved")}
           </Tabs.Tab>
+          <Tabs.Tab
+            value="all"
+            leftSection={
+              <Badge size="sm" variant="light" color="gray">
+                {allAggregatedParents.length}
+              </Badge>
+            }
+          >
+            {t("All comments")}
+          </Tabs.Tab>
         </Tabs.List>
 
         <ScrollArea
@@ -238,7 +269,7 @@ function CommentListWithTabs() {
                   </Stack>
                 </Center>
               ) : (
-                activeComments.map(renderComments)
+                activeComments.map((c) => renderComments(c, comments))
               )}
             </Tabs.Panel>
 
@@ -257,7 +288,32 @@ function CommentListWithTabs() {
                   </Stack>
                 </Center>
               ) : (
-                resolvedComments.map(renderComments)
+                resolvedComments.map((c) => renderComments(c, comments))
+              )}
+            </Tabs.Panel>
+
+            <Tabs.Panel value="all" pt="xs">
+              {isAggregatedError ? (
+                <div>{t("Error loading comments.")}</div>
+              ) : isAggregatedLoading && allAggregatedParents.length === 0 ? (
+                <></>
+              ) : allAggregatedParents.length === 0 ? (
+                <Center py="xl">
+                  <Stack align="center" gap="xs">
+                    <IconMessageOff
+                      size={32}
+                      stroke={1.5}
+                      color="var(--mantine-color-dimmed)"
+                    />
+                    <Text size="sm" c="dimmed">
+                      {t("No comments across this page and its children.")}
+                    </Text>
+                  </Stack>
+                </Center>
+              ) : (
+                allAggregatedParents.map((c) =>
+                  renderComments(c, aggregatedComments),
+                )
               )}
             </Tabs.Panel>
           </div>

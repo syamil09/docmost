@@ -21,6 +21,14 @@ export interface IComment {
     anchor: any;
     head: any;
   };
+  page?: {
+    id: string;
+    slugId?: string;
+    title: string;
+    icon?: string;
+    spaceId?: string;
+    spaceSlug?: string;
+  };
 }
 
 export interface ICommentData {

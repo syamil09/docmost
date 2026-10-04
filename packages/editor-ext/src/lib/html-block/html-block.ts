@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import { ReactNodeViewRenderer } from "@tiptap/react";
 import { NodeSelection, Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 
 export interface HtmlBlockOptions {
@@ -113,6 +114,23 @@ export const HtmlBlock = Node.create<HtmlBlockOptions>({
             },
           });
         },
+    };
+  },
+
+  addNodeView() {
+    if (this.options.view) {
+      // Force the react node view to render immediately using flush sync
+      this.editor.isInitialized = true;
+      return ReactNodeViewRenderer(this.options.view);
+    }
+
+    return ({ node }) => {
+      const dom = document.createElement("div");
+      dom.setAttribute("data-type", this.name);
+      const pre = document.createElement("pre");
+      pre.textContent = node.attrs.code || "";
+      dom.appendChild(pre);
+      return { dom };
     };
   },
 

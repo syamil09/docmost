@@ -1,36 +1,26 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "lsp": true,
   "mcp": {
-    "mssql-server": {
+    "playwright": {
       "type": "local",
-      "enabled": true,
       "command": [
-        "./mcp-mssql.exe",
-        "./.mcp-mssql-config.json"
-      ]
-    },
-    "docmost": {
-      "type": "local",
-      "enabled": true,
-      "command": [
-        "C:\\Users\\Leonovo\\Documents\\Bentang Project\\docmost-mcp-go\\dist\\docmost-mcp.exe"
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--headless",
+        "--no-sandbox"
       ],
-      "environment": {
-        "DOCMOST_URL": "http://localhost:3000",
-        "DOCMOST_EMAIL": "syamil@bentang.id",
-        "DOCMOST_PASSWORD": "docmostOtsuka"
-      }
+      "enabled": true
     }
   },
   "provider": {
     "databyte": {
       "type": "api",
-      "key": "Bearer sk-db-urcSOum3NqmUQcB3dvsZfgIZckvQcSgcishvvdnPQ1hrPopg",
+      "key": "Bearer sk-db-E7UZPrcCY2Hkp16BsI6gfDLvFt8vGVdASJy3YSQEWc2ngOKA",
       "npm": "@ai-sdk/openai-compatible",
       "options": {
         "baseURL": "https://ai.databyte.co.id/v1",
-        "apiKey": "sk-db-urcSOum3NqmUQcB3dvsZfgIZckvQcSgcishvvdnPQ1hrPopg",
+        "apiKey": "sk-db-E7UZPrcCY2Hkp16BsI6gfDLvFt8vGVdASJy3YSQEWc2ngOKA",
         "name": "databyte"
       },
       "models": {
@@ -44,9 +34,9 @@
           "max_tokens": 1000000,
           "name": "deepseek-v4-flash"
         },
-        "deepseek-v4-pro": {
+        "minimax-m3": {
           "id": "MiniMax-M3",
-          "max_tokens": 50000,
+          "max_tokens": 1000000,
           "name": "MiniMax-M3"
         }
       }

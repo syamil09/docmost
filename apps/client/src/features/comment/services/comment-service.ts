@@ -37,6 +37,13 @@ export async function getPageComments(
   return req.data;
 }
 
+export async function getAggregatedComments(
+  data: ICommentParams,
+): Promise<IPagination<IComment>> {
+  const req = await api.post("/comments/aggregated", data);
+  return req.data;
+}
+
 export async function deleteComment(commentId: string): Promise<void> {
   await api.post("/comments/delete", { commentId });
 }
