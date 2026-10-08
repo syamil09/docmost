@@ -5,7 +5,11 @@ import { Node } from '@tiptap/pm/model';
 import { validate as isValidUUID } from 'uuid';
 import * as path from 'path';
 import { Page } from '@docmost/db/types/entity.types';
-import { isAttachmentNode } from '../../common/helpers/prosemirror/utils';
+import {
+  extractAttachmentIdFromUrl,
+  isAttachmentNode,
+  resolveAttachmentId,
+} from '../../common/helpers/prosemirror/utils';
 import { sanitizeFileName } from '../../common/helpers';
 
 export type PageExportTree = Record<string, Page[]>;
@@ -35,7 +39,33 @@ export function getSafePageTitle(title: string): string {
   return sanitized || 'untitled';
 }
 
-export function updateAttachmentUrlsToLocalPaths(prosemirrorJson: any) {
+// Unlike getAttachmentIds, also resolves the id from src/url, so images
+// inserted as raw HTML (absolute /api/files URL, no data-attachment-id)
+// are exported too.
+export function getExportAttachmentIds(prosemirrorJson: any): string[] {
+  const doc = jsonToNode(prosemirrorJson);
+  const attachmentIds: string[] = [];
+
+  doc?.descendants((node: Node) => {
+    if (!isAttachmentNode(node.type.name)) return;
+    const attachmentId = resolveAttachmentId(node);
+    if (attachmentId && !attachmentIds.includes(attachmentId)) {
+      attachmentIds.push(attachmentId);
+    }
+  });
+
+  return attachmentIds;
+}
+
+/**
+ * @param exportedFiles attachment id -> file name of the files written to
+ * the zip. Absolute URLs are only rewritten when their file was exported,
+ * otherwise they keep pointing at the source server.
+ */
+export function updateAttachmentUrlsToLocalPaths(
+  prosemirrorJson: any,
+  exportedFiles?: Map<string, string>,
+) {
   const doc = jsonToNode(prosemirrorJson);
   if (!doc) return null;
 
@@ -45,6 +75,14 @@ export function updateAttachmentUrlsToLocalPaths(prosemirrorJson: any) {
     for (const prefix of prefixes) {
       if (url.startsWith(prefix)) {
         return url.replace(prefix, 'files');
+      }
+    }
+
+    if (/^https?:\/\//i.test(url)) {
+      const attachmentId = extractAttachmentIdFromUrl(url);
+      const fileName = attachmentId && exportedFiles?.get(attachmentId);
+      if (fileName) {
+        return `files/${attachmentId}/${fileName}`;
       }
     }
     return url;

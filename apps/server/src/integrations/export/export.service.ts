@@ -14,6 +14,7 @@ import { StorageService } from '../storage/storage.service';
 import {
   buildTree,
   computeLocalPath,
+  getExportAttachmentIds,
   getExportExtension,
   getPageTitle,
   getSafePageTitle,
@@ -34,10 +35,7 @@ import slugify from '@sindresorhus/slugify';
 const packageJson = require('../../../package.json');
 import { EnvironmentService } from '../environment/environment.service';
 import { DomainService } from '../environment/domain.service';
-import {
-  getAttachmentIds,
-  getProsemirrorContent,
-} from '../../common/helpers/prosemirror/utils';
+import { getProsemirrorContent } from '../../common/helpers/prosemirror/utils';
 import { htmlToMarkdown } from '@docmost/editor-ext';
 
 type AllowedAttachment = { id: string; fileName: string; filePath: string };
@@ -310,9 +308,15 @@ export class ExportService {
         );
 
         if (includeAttachments) {
-          await this.zipAttachments(updatedJsonContent, folder, allowedAttachments);
-          updatedJsonContent =
-            updateAttachmentUrlsToLocalPaths(updatedJsonContent);
+          const exportedFiles = await this.zipAttachments(
+            updatedJsonContent,
+            folder,
+            allowedAttachments,
+          );
+          updatedJsonContent = updateAttachmentUrlsToLocalPaths(
+            updatedJsonContent,
+            exportedFiles,
+          );
         }
 
         const pageTitle = getSafePageTitle(page.title);
@@ -356,12 +360,16 @@ export class ExportService {
     zip.file('docmost-metadata.json', JSON.stringify(metadata, null, 2));
   }
 
+  /**
+   * @returns attachment id -> file name of every file written to the zip
+   */
   async zipAttachments(
     prosemirrorJson: any,
     zip: JSZip,
     allowed: Map<string, AllowedAttachment>,
-  ) {
-    const attachmentIds = getAttachmentIds(prosemirrorJson);
+  ): Promise<Map<string, string>> {
+    const attachmentIds = getExportAttachmentIds(prosemirrorJson);
+    const exportedFiles = new Map<string, string>();
 
     await Promise.all(
       attachmentIds.map(async (id) => {
@@ -373,11 +381,14 @@ export class ExportService {
           );
           const filePath = `/files/${attachment.id}/${attachment.fileName}`;
           zip.file(filePath, fileBuffer);
+          exportedFiles.set(attachment.id, attachment.fileName);
         } catch (err) {
           this.logger.debug(`Attachment export error ${attachment.id}`, err);
         }
       }),
     );
+
+    return exportedFiles;
   }
 
   private async resolveAccessibleAttachments(
@@ -390,7 +401,9 @@ export class ExportService {
     for (const siblings of Object.values(tree)) {
       for (const page of siblings) {
         if (!spaceId) spaceId = page.spaceId;
-        for (const id of getAttachmentIds(getProsemirrorContent(page.content))) {
+        for (const id of getExportAttachmentIds(
+          getProsemirrorContent(page.content),
+        )) {
           allAttachmentIds.add(id);
         }
       }
