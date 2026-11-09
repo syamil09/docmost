@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDebouncedCallback } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { IBaseProperty, IBaseRow } from "@/ee/base/types/base.types";
 import { timeAgo } from "@/lib/time.ts";
+import { AUTOSAVE_DELAY_MS } from "@/ee/base/constants/autosave";
 import classes from "@/ee/base/styles/row-detail-modal.module.css";
 
 type RowDetailTitleProps = {
@@ -9,7 +11,7 @@ type RowDetailTitleProps = {
   primaryProperty: IBaseProperty | undefined;
   canEdit: boolean;
   onCommit: (value: string) => void;
-  onClose: () => void;
+  onEditingChange?: (editing: boolean) => void;
 };
 
 export function RowDetailTitle({
@@ -17,17 +19,30 @@ export function RowDetailTitle({
   primaryProperty,
   canEdit,
   onCommit,
-  onClose,
+  onEditingChange,
 }: RowDetailTitleProps) {
   const { t } = useTranslation();
   const initial = primaryProperty
     ? (((row.cells ?? {})[primaryProperty.id] as string) ?? "")
     : "";
   const [value, setValue] = useState(initial);
+  const focusedRef = useRef(false);
 
-  // Re-sync when the row changes underneath us (navigation or remote edit).
+  const save = () => {
+    if (value !== initial) onCommit(value);
+  };
+  const autosave = useDebouncedCallback(save, AUTOSAVE_DELAY_MS);
+
+  const commit = () => {
+    focusedRef.current = false;
+    onEditingChange?.(false);
+    autosave.cancel();
+    save();
+  };
+
+  // Re-sync when the row changes underneath us (navigation or remote edit), but not mid-typing.
   useEffect(() => {
-    setValue(initial);
+    if (!focusedRef.current) setValue(initial);
   }, [initial]);
 
   const updatedAgo = row.updatedAt ? timeAgo(new Date(row.updatedAt)) : "";
@@ -43,18 +58,21 @@ export function RowDetailTitle({
           aria-label={primaryProperty?.name ?? t("Untitled")}
           value={value}
           maxLength={1000}
-          onChange={(e) => setValue(e.currentTarget.value)}
-          onBlur={() => {
-            if (value !== initial) onCommit(value);
+          onFocus={() => {
+            focusedRef.current = true;
+            onEditingChange?.(true);
           }}
+          onChange={(e) => {
+            setValue(e.currentTarget.value);
+            autosave();
+          }}
+          onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Escape") {
+              e.currentTarget.blur();
+            } else if (e.key === "Enter") {
               e.preventDefault();
-              (e.currentTarget as HTMLInputElement).blur();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              (e.currentTarget as HTMLInputElement).blur();
-              onClose();
+              e.currentTarget.blur();
             }
           }}
         />

@@ -24,12 +24,18 @@ export interface IWorkspace {
   aiSearch?: boolean;
   generativeAi?: boolean;
   disablePublicSharing?: boolean;
+  allowPublicSpaces?: boolean;
+  publicSpacesDirectory?: boolean;
   mcpEnabled?: boolean;
+  aiChatReadOnly?: boolean;
+  aiChatWorkspaceKnowledgeOnly?: boolean;
+  enforceMcpOauth?: boolean;
   trashRetentionDays?: number;
   restrictApiToAdmins?: boolean;
   allowMemberTemplates?: boolean;
   allowPersonalSpaces?: boolean;
   defaultPageEditMode?: string;
+  defaultLocale?: string;
   isScimEnabled?: boolean;
 }
 
@@ -39,7 +45,9 @@ export interface IWorkspaceSettings {
   api?: IWorkspaceApiSettings;
   templates?: IWorkspaceTemplateSettings;
   spaces?: IWorkspaceSpaceSettings;
+  publicSpaces?: IWorkspacePublicSpacesSettings;
   defaultPageEditMode?: string;
+  defaultLocale?: string;
 }
 
 export interface IWorkspaceApiSettings {
@@ -50,7 +58,10 @@ export interface IWorkspaceAiSettings {
   search?: boolean;
   generative?: boolean;
   mcp?: boolean;
+  enforceMcpOauth?: boolean;
   chat?: boolean;
+  chatReadOnly?: boolean;
+  chatWorkspaceKnowledgeOnly?: boolean;
 }
 
 export interface IWorkspaceSharingSettings {
@@ -63,6 +74,11 @@ export interface IWorkspaceTemplateSettings {
 
 export interface IWorkspaceSpaceSettings {
   allowPersonal?: boolean;
+}
+
+export interface IWorkspacePublicSpacesSettings {
+  enabled?: boolean;
+  directory?: boolean;
 }
 
 export interface ICreateInvite {
@@ -78,6 +94,7 @@ export interface IInvitation {
   workspaceId: string;
   invitedById: string;
   createdAt: Date;
+  expiresAt: Date;
   enforceSso: boolean;
 }
 
@@ -99,6 +116,7 @@ export interface IPublicWorkspace {
   hostname: string;
   enforceSso: boolean;
   authProviders: IAuthProvider[];
+  defaultLocale: string;
 }
 
 export interface IVersion {

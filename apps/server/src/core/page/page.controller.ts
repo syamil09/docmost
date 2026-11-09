@@ -26,6 +26,7 @@ import { PageHistoryService } from './services/page-history.service';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OAuthScope } from '../../common/decorators/oauth-scope.decorator';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { SidebarPageDto } from './dto/sidebar-page.dto';
@@ -69,6 +70,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('/info')
+  @OAuthScope('read')
   async getPage(@Body() dto: PageInfoDto, @AuthUser() user: User) {
     const page = await this.pageRepo.findById(dto.pageId, {
       includeSpace: true,
@@ -199,6 +201,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('create')
+  @OAuthScope('write')
   async create(
     @Body() createPageDto: CreatePageDto,
     @AuthUser() user: User,
@@ -269,6 +272,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('update')
+  @OAuthScope('write')
   async update(@Body() updatePageDto: UpdatePageDto, @AuthUser() user: User) {
     const page = await this.pageRepo.findById(updatePageDto.pageId);
 
@@ -413,6 +417,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('recent')
+  @OAuthScope('read')
   async getRecentPages(
     @Body() recentPageDto: RecentPageDto,
     @Body() pagination: PaginationOptions,
@@ -527,6 +532,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('/sidebar-pages')
+  @OAuthScope('read')
   async getSidebarPages(
     @Body() dto: SidebarPageDto,
     @Body() pagination: PaginationOptions,
@@ -538,6 +544,7 @@ export class PageController {
       );
     }
     let spaceId = dto.spaceId;
+    let pageId: string;
 
     if (dto.pageId) {
       const page = await this.pageRepo.findById(dto.pageId);
@@ -546,6 +553,7 @@ export class PageController {
       }
 
       spaceId = page.spaceId;
+      pageId = page.id;
     }
 
     const ability = await this.spaceAbility.createForUser(user, spaceId);
@@ -561,7 +569,7 @@ export class PageController {
     return this.pageService.getSidebarPages(
       spaceId,
       pagination,
-      dto.pageId,
+      pageId,
       user.id,
       spaceCanEdit,
     );
@@ -569,6 +577,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('move-to-space')
+  @OAuthScope('write')
   async movePageToSpace(
     @Body() dto: MovePageToSpaceDto,
     @AuthUser() user: User,
@@ -598,11 +607,8 @@ export class PageController {
     await this.pageAccessService.validateCanEdit(movedPage, user);
 
     // Moves only accessible pages; inaccessible child pages become root pages in original space
-    const { childPageIds } = await this.pageService.movePageToSpace(
-      movedPage,
-      dto.spaceId,
-      user.id,
-    );
+    const { childPageIds, deletedShares } =
+      await this.pageService.movePageToSpace(movedPage, dto.spaceId, user.id);
 
     this.auditService.log({
       event: AuditEvent.PAGE_MOVED_TO_SPACE,
@@ -618,10 +624,26 @@ export class PageController {
         ...(childPageIds.length > 0 && { childPageIds }),
       },
     });
+
+    for (const share of deletedShares) {
+      this.auditService.log({
+        event: AuditEvent.SHARE_DELETED,
+        resourceType: AuditResource.SHARE,
+        resourceId: share.id,
+        spaceId: share.spaceId,
+        changes: {
+          before: {
+            pageId: share.pageId,
+            spaceId: share.spaceId,
+          },
+        },
+      });
+    }
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('duplicate')
+  @OAuthScope('write')
   async duplicatePage(@Body() dto: DuplicatePageDto, @AuthUser() user: User) {
     const copiedPage = await this.pageRepo.findById(dto.pageId);
     if (!copiedPage) {
@@ -706,6 +728,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('move')
+  @OAuthScope('write')
   async movePage(@Body() dto: MovePageDto, @AuthUser() user: User) {
     const movedPage = await this.pageRepo.findById(dto.pageId);
     if (!movedPage) {

@@ -9,6 +9,7 @@ import {
   createRetryStrategy,
   parseRedisUrl,
   RedisConfig,
+  resolveClientIp,
 } from '../common/helpers';
 import { LoggerExtension } from './extensions/logger.extension';
 import {
@@ -63,9 +64,11 @@ export class CollaborationGateway {
         redis: new RedisClient({
           host: this.redisConfig.host,
           port: this.redisConfig.port,
+          username: this.redisConfig.username,
           password: this.redisConfig.password,
           db: this.redisConfig.db,
           family: this.redisConfig.family,
+          tls: this.redisConfig.tls,
           retryStrategy: createRetryStrategy(),
         }),
         serverId: `collab-${os?.hostname()}-${nanoid(10)}`,
@@ -90,7 +93,7 @@ export class CollaborationGateway {
         'sec-websocket-protocol':
           request.headers['sec-websocket-protocol'] ?? '',
       },
-      socket: { remoteAddress: request.socket?.remoteAddress ?? '' },
+      socket: { remoteAddress: resolveClientIp(request) ?? '' },
     };
   }
 
@@ -144,8 +147,14 @@ export class CollaborationGateway {
     eventName: TName,
     documentName: string,
     payload: Parameters<CollabEventHandlers[TName]>[1],
+    onlyIfOpen = false,
   ) {
-    return this.redisSync?.handleEvent(eventName, documentName, payload);
+    return this.redisSync?.handleEvent(
+      eventName,
+      documentName,
+      payload,
+      onlyIfOpen,
+    );
   }
 
   openDirectConnection(documentName: string, context?: any) {

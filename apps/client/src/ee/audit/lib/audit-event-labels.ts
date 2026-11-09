@@ -22,6 +22,7 @@ export const auditEventLabels: Record<string, string> = {
   "user.role_changed": "Changed user role",
   "user.password_changed": "Changed password",
   "user.password_reset": "Reset password",
+  "user.password_reset_requested": "Requested password reset",
   "user.updated": "Updated user",
   "user.deactivated": "Deactivated user",
   "user.activated": "Activated user",
@@ -32,6 +33,11 @@ export const auditEventLabels: Record<string, string> = {
   "api_key.created": "Created API key",
   "api_key.updated": "Updated API key",
   "api_key.deleted": "Deleted API key",
+
+  "integration.installed": "Installed integration",
+  "integration.uninstalled": "Uninstalled integration",
+  "integration.connected": "Connected integration account",
+  "integration.disconnected": "Disconnected integration account",
 
   "scim_token.created": "Created SCIM token",
   "scim_token.updated": "Updated SCIM token",
@@ -44,6 +50,8 @@ export const auditEventLabels: Record<string, string> = {
   "space.member_removed": "Removed space member",
   "space.member_role_changed": "Changed space member role",
   "space.exported": "Exported space",
+  "space.archived": "Archived space",
+  "space.unarchived": "Unarchived space",
 
   "group.created": "Created group",
   "group.updated": "Updated group",
@@ -51,7 +59,12 @@ export const auditEventLabels: Record<string, string> = {
   "group.member_added": "Added group member",
   "group.member_removed": "Removed group member",
 
+  "comment.updated": "Updated comment",
+  "comment.resolved": "Resolved comment",
+  "comment.reopened": "Reopened comment",
   "comment.deleted": "Deleted comment",
+
+  "attachment.deleted": "Deleted attachment",
 
   "page.trashed": "Trashed page",
   "page.deleted": "Deleted page",
@@ -62,6 +75,7 @@ export const auditEventLabels: Record<string, string> = {
   "page.restriction_removed": "Removed page restriction",
   "page.permission_added": "Added page permission",
   "page.permission_removed": "Removed page permission",
+  "page.permission_role_changed": "Changed page permission",
   "page.verification_created": "Created page verification",
   "page.verification_updated": "Updated page verification",
   "page.verification_removed": "Removed page verification",
@@ -79,6 +93,13 @@ export const auditEventLabels: Record<string, string> = {
 
   "license.activated": "Activated license",
   "license.removed": "Removed license",
+
+  "siem_destination.created": "Created SIEM destination",
+  "siem_destination.updated": "Updated SIEM destination",
+  "siem_destination.deleted": "Deleted SIEM destination",
+
+  "template.created": "Created template",
+  "template.deleted": "Deleted template",
 };
 
 export function getEventLabel(event: string): string {
@@ -105,6 +126,10 @@ export const eventFilterOptions: EventGroup[] = [
       { value: "user.activated", label: "Activated user" },
       { value: "user.role_changed", label: "Changed user role" },
       { value: "user.password_changed", label: "Changed password" },
+      {
+        value: "user.password_reset_requested",
+        label: "Requested password reset",
+      },
       { value: "user.mfa_enabled", label: "Enabled MFA" },
       { value: "user.mfa_disabled", label: "Disabled MFA" },
     ],
@@ -117,6 +142,8 @@ export const eventFilterOptions: EventGroup[] = [
       { value: "space.deleted", label: "Deleted space" },
       { value: "space.member_added", label: "Added space member" },
       { value: "space.member_removed", label: "Removed space member" },
+      { value: "space.archived", label: "Archived space" },
+      { value: "space.unarchived", label: "Unarchived space" },
     ],
   },
   {
@@ -132,7 +159,16 @@ export const eventFilterOptions: EventGroup[] = [
   {
     group: "Comment",
     items: [
+      { value: "comment.updated", label: "Updated comment" },
+      { value: "comment.resolved", label: "Resolved comment" },
+      { value: "comment.reopened", label: "Reopened comment" },
       { value: "comment.deleted", label: "Deleted comment" },
+    ],
+  },
+  {
+    group: "Attachment",
+    items: [
+      { value: "attachment.deleted", label: "Deleted attachment" },
     ],
   },
   {
@@ -147,6 +183,10 @@ export const eventFilterOptions: EventGroup[] = [
       { value: "page.restriction_removed", label: "Removed page restriction" },
       { value: "page.permission_added", label: "Added page permission" },
       { value: "page.permission_removed", label: "Removed page permission" },
+      {
+        value: "page.permission_role_changed",
+        label: "Changed page permission",
+      },
       { value: "page.verification_created", label: "Created page verification" },
       { value: "page.verification_updated", label: "Updated page verification" },
       { value: "page.verification_removed", label: "Removed page verification" },
@@ -179,6 +219,15 @@ export const eventFilterOptions: EventGroup[] = [
     ],
   },
   {
+    group: "Integrations",
+    items: [
+      { value: "integration.installed", label: "Installed integration" },
+      { value: "integration.uninstalled", label: "Uninstalled integration" },
+      { value: "integration.connected", label: "Connected integration account" },
+      { value: "integration.disconnected", label: "Disconnected integration account" },
+    ],
+  },
+  {
     group: "SCIM token",
     items: [
       { value: "scim_token.created", label: "Created SCIM token" },
@@ -191,6 +240,21 @@ export const eventFilterOptions: EventGroup[] = [
     items: [
       { value: "license.activated", label: "Activated license" },
       { value: "license.removed", label: "Removed license" },
+    ],
+  },
+  {
+    group: "SIEM",
+    items: [
+      { value: "siem_destination.created", label: "Created SIEM destination" },
+      { value: "siem_destination.updated", label: "Updated SIEM destination" },
+      { value: "siem_destination.deleted", label: "Deleted SIEM destination" },
+    ],
+  },
+  {
+    group: "Template",
+    items: [
+      { value: "template.created", label: "Created template" },
+      { value: "template.deleted", label: "Deleted template" },
     ],
   },
 ];

@@ -2,24 +2,34 @@ import classes from "./switch-space.module.css";
 import { useNavigate } from "react-router-dom";
 import { SpaceSelect } from "./space-select";
 import { getSpaceUrl } from "@/lib/config";
-import { Button, Popover, Text } from "@mantine/core";
-import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
+import { Badge, Button, Popover, Text, Tooltip } from "@mantine/core";
+import {
+  IconChevronDown,
+  IconChevronUp,
+  IconWorld,
+} from "@tabler/icons-react";
 import { useDisclosure } from "@mantine/hooks";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 interface SwitchSpaceProps {
   spaceName: string;
   spaceSlug: string;
   spaceIcon?: string;
+  isPublished?: boolean;
+  isArchived?: boolean;
 }
 
 export function SwitchSpace({
   spaceName,
   spaceSlug,
   spaceIcon,
+  isPublished,
+  isArchived,
 }: SwitchSpaceProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [opened, { close, toggle }] = useDisclosure(false);
 
@@ -61,6 +71,27 @@ export function SwitchSpace({
           <Text className={classes.spaceName} size="md" fw={500} lineClamp={1}>
             {spaceName}
           </Text>
+
+          {isArchived && (
+            <Badge
+              size="xs"
+              variant="light"
+              color="gray"
+              style={{ flexShrink: 0 }}
+            >
+              {t("Archived")}
+            </Badge>
+          )}
+
+          {isPublished && (
+            <Tooltip label={t("This space is public")}>
+              <IconWorld
+                size={14}
+                aria-label={t("This space is public")}
+                style={{ flexShrink: 0 }}
+              />
+            </Tooltip>
+          )}
         </Button>
       </Popover.Target>
       <Popover.Dropdown>

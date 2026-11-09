@@ -12,9 +12,12 @@ export enum EventName {
   SPACE_UPDATED = 'space.updated',
   SPACE_DELETED = 'space.deleted',
 
+  USER_PASSWORD_RESET = 'user.password.reset',
+
   WORKSPACE_CREATED = 'workspace.created',
   WORKSPACE_UPDATED = 'workspace.updated',
   WORKSPACE_DELETED = 'workspace.deleted',
+  NOTIFICATION_CREATED = 'notification.created',
 
   BASE_CREATED = 'base.created',
   BASE_UPDATED = 'base.updated',

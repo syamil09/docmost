@@ -75,6 +75,7 @@ export function RowDetailModal({
 
   const isSaving = updateRowMutation.isPending;
   const opened = !!openRowId;
+  const [editingField, setEditingField] = useState(false);
 
   // One field menu open at a time, mirroring the grid header's semantics.
   // The shared closeRequest atom asks an open dirty PropertyMenuContent to
@@ -90,6 +91,7 @@ export function RowDetailModal({
   useEffect(() => {
     setOpenMenuId(null);
     menuDirtyRef.current = false;
+    setEditingField(false);
   }, [openRowId]);
 
   const handleMenuDirtyChange = useCallback((dirty: boolean) => {
@@ -166,10 +168,11 @@ export function RowDetailModal({
 
   // Mantine's closeOnEscape runs a capture-phase window listener that fires
   // before inner popovers and inputs see the key, so we manage Esc ourselves
-  // and yield to: nested dialogs (delete confirm), open popovers
-  // ([data-position]) and editable elements. Arrows step records under the
-  // same yield rules. Mantine puts role="dialog" and our content class on
-  // the same element, which distinguishes this modal from nested ones.
+  // and yield to nested dialogs (delete confirm) and open popovers
+  // ([data-position]). Esc in an inline field blurs it first, which saves the
+  // edit, then closes; arrows stay with the field. Mantine puts role="dialog"
+  // and our content class on the same element, which distinguishes this
+  // modal from nested ones.
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       const isEscape = event.key === "Escape";
@@ -181,11 +184,10 @@ export function RowDetailModal({
         if (dialog && !dialog.classList.contains(classes.modalContent)) {
           return;
         }
-        if (
-          target.closest("[data-position]") ||
-          target.matches("input, textarea, select, [contenteditable='true']")
-        ) {
-          return;
+        if (target.closest("[data-position]")) return;
+        if (target.matches("input, textarea, select, [contenteditable='true']")) {
+          if (!isEscape) return;
+          target.blur();
         }
       }
       if (isEscape) {
@@ -293,7 +295,7 @@ export function RowDetailModal({
             row={row}
             primaryProperty={primaryProperty}
             canEdit={canEdit}
-            onClose={onClose}
+            onEditingChange={setEditingField}
             onCommit={(value) => {
               if (!primaryProperty) return;
               updateRowMutation.mutate({
@@ -317,6 +319,7 @@ export function RowDetailModal({
                     autoFocusValue={property.id === newPropertyId}
                     onAutoFocused={clearNewProperty}
                     menuOpened={openMenuId === property.id}
+                    onEditingChange={setEditingField}
                     onMenuOpenChange={(nextOpened) =>
                       handleMenuOpenChange(property.id, nextOpened)
                     }
@@ -367,16 +370,38 @@ export function RowDetailModal({
               ) : null}
             </div>
             <div className={classes.kbdHint}>
-              {rowIndex >= 0 && rows.length > 1 && (
+              {editingField ? (
                 <>
-                  <kbd className={classes.kbd}>↑</kbd>
-                  <kbd className={classes.kbd}>↓</kbd>
-                  <span>{t("to navigate")}</span>
+                  <span className={classes.kbdGroup}>
+                    <kbd className={classes.kbd}>Ctrl/Cmd</kbd>
+                    <span className={classes.kbdPlus} >+</span>
+                    <kbd className={classes.kbd}>Enter</kbd>
+                    <span>{t("to save")}</span>
+                  </span>
+
                   <span className={classes.kbdSeparator} />
+
+                  <span className={classes.kbdGroup}>
+                    <kbd className={classes.kbd}>Esc</kbd>
+                    <span>{t("to close")}</span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  {rowIndex >= 0 && rows.length > 1 && (
+                    <>
+                      <kbd className={classes.kbd}>↑</kbd>
+                      <kbd className={classes.kbd}>↓</kbd>
+                      <span>{t("to navigate")}</span>
+                      <span className={classes.kbdSeparator} />
+                    </>
+                  )}
+                  <>
+                    <kbd className={classes.kbd}>Esc</kbd>
+                    <span>{t("to close")}</span>
+                  </>
                 </>
               )}
-              <kbd className={classes.kbd}>Esc</kbd>
-              <span>{t("to close")}</span>
             </div>
           </footer>
         </>

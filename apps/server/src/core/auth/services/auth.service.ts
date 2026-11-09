@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -32,6 +33,7 @@ import { UserTokenType } from '../auth.constants';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { InjectKysely } from 'nestjs-kysely';
 import { executeTx } from '@docmost/db/utils';
+import { WsService } from '../../../ws/ws.service';
 import { VerifyUserTokenDto } from '../dto/verify-user-token.dto';
 import { DomainService } from '../../../integrations/environment/domain.service';
 import { AuditEvent, AuditResource } from '../../../common/events/audit-events';
@@ -40,9 +42,13 @@ import {
   IAuditService,
 } from '../../../integrations/audit/audit.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private signupService: SignupService,
     private tokenService: TokenService,
@@ -53,8 +59,10 @@ export class AuthService {
     private mailService: MailService,
     private domainService: DomainService,
     private environmentService: EnvironmentService,
+    private eventEmitter: EventEmitter2,
     @InjectKysely() private readonly db: KyselyDB,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
+    private wsService: WsService,
   ) {}
 
   async login(loginDto: LoginDto, workspaceId: string) {
@@ -149,8 +157,10 @@ export class AuthService {
         userId,
         workspaceId,
       );
+      this.wsService.disconnectOtherSessions(userId, currentSessionId);
     } else {
       await this.userSessionRepo.deleteByUserId(userId, workspaceId);
+      this.wsService.disconnectUser(userId);
     }
 
     this.auditService.log({
@@ -213,6 +223,13 @@ export class AuthService {
       subject: 'Reset your password',
       template: emailTemplate,
     });
+
+    this.auditService.log({
+      event: AuditEvent.USER_PASSWORD_RESET_REQUESTED,
+      resourceType: AuditResource.USER,
+      resourceId: user.id,
+      metadata: { source: 'forgot_password' },
+    });
   }
 
   async passwordReset(
@@ -260,6 +277,20 @@ export class AuthService {
     });
 
     await this.userSessionRepo.deleteByUserId(user.id, workspace.id);
+    this.wsService.disconnectUser(user.id);
+
+    // A failed revocation must not block the reset itself; log loudly instead.
+    try {
+      await this.eventEmitter.emitAsync(EventName.USER_PASSWORD_RESET, {
+        userId: user.id,
+        workspaceId: workspace.id,
+      });
+    } catch (err) {
+      this.logger.error(
+        `failed to revoke oauth grants for user ${user.id} after password reset`,
+        err,
+      );
+    }
 
     this.auditService.setActorId(user.id);
     this.auditService.log({

@@ -10,22 +10,33 @@ import { TransformHttpResponseInterceptor } from './common/interceptors/http-res
 import { WsRedisIoAdapter } from './ws/adapter/ws-redis.adapter';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCookie from '@fastify/cookie';
-import fastifyIp from 'fastify-ip';
 import { InternalLogFilter } from './common/logger/internal-log-filter';
 import { EnvironmentService } from './integrations/environment/environment.service';
-import { resolveFrameHeader } from './common/helpers';
+import {
+  overrideRequestIp,
+  resolveFrameHeader,
+  resolveFrameHeadersForPath,
+} from './common/helpers';
+
+// Provider redirects land on the central app host, outside any workspace.
+const OAUTH_CALLBACK_PATH =
+  /^\/api\/integrations\/oauth\/[^/?#]+\/callback(?:[?#]|$)/;
 
 async function bootstrap() {
+  const adapter = new FastifyAdapter({
+    trustProxy: true,
+    routerOptions: {
+      maxParamLength: 1000,
+      ignoreTrailingSlash: true,
+      ignoreDuplicateSlashes: true,
+    },
+  });
+  // Added before NestFactory.create so it runs ahead of middie copying request.ip for Nest middleware.
+  adapter.getInstance().addHook('onRequest', overrideRequestIp);
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({
-      trustProxy: true,
-      routerOptions: {
-        maxParamLength: 1000,
-        ignoreTrailingSlash: true,
-        ignoreDuplicateSlashes: true,
-      },
-    }),
+    adapter,
     {
       rawBody: true,
       // captures NestJS internal errors
@@ -39,7 +50,17 @@ async function bootstrap() {
   app.useLogger(app.get(PinoLogger));
 
   app.setGlobalPrefix('api', {
-    exclude: ['robots.txt', 'share/:shareId/p/:pageSlug', 'mcp'],
+    exclude: [
+      'robots.txt',
+      'share/:shareId/p/:pageSlug',
+      'mcp',
+      '.well-known/oauth-authorization-server',
+      '.well-known/oauth-protected-resource',
+      '.well-known/oauth-protected-resource/mcp',
+      'docs',
+      'docs/:spaceSlug',
+      'docs/:spaceSlug/:pageSlug',
+    ],
   });
 
   const reflector = app.get(Reflector);
@@ -48,7 +69,6 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(redisIoAdapter);
 
-  await app.register(fastifyIp);
   await app.register(fastifyMultipart);
   await app.register(fastifyCookie);
 
@@ -57,29 +77,24 @@ async function bootstrap() {
     environmentService.isIframeEmbedAllowed(),
     environmentService.getIframeAllowedOrigins(),
   );
-  if (frameHeader) {
-    // Skipped routes:
-    //   /api/files/ - attachment controller sets its own CSP we'd overwrite
-    //   /share/     0 public share pages are safe to embed
-    const frameHeaderSkippedPrefixes = ['/api/files/', '/share/'];
-    app
-      .getHttpAdapter()
-      .getInstance()
-      .addHook('onSend', (req, reply, payload, done) => {
-        if (frameHeaderSkippedPrefixes.some((p) => req.url.startsWith(p))) {
-          return done(null, payload);
-        }
-        reply.header(frameHeader.name, frameHeader.value);
-        done(null, payload);
-      });
-  }
-
+  // Skipped routes:
+  //   /api/files/ - attachment controller sets its own CSP we'd overwrite
+  //   /share/     - public share pages are safe to embed
+  //   /docs/      - public space pages are safe to embed
+  const frameHeaderSkippedPrefixes = ['/api/files/', '/share/', '/docs/'];
   app
     .getHttpAdapter()
     .getInstance()
-    .addHook('onRequest', (request, _reply, done) => {
-      (request.raw as any).ip = request.ip;
-      done();
+    .addHook('onSend', (req, reply, payload, done) => {
+      if (frameHeaderSkippedPrefixes.some((p) => req.url.startsWith(p))) {
+        return done(null, payload);
+      }
+      const path = req.url.split('?')[0];
+      // Force-denies the oauth consent screen even when the global frame header is absent.
+      for (const header of resolveFrameHeadersForPath(path, frameHeader)) {
+        reply.header(header.name, header.value);
+      }
+      done(null, payload);
     });
 
   app
@@ -118,11 +133,15 @@ async function bootstrap() {
         '/api/workspace/create',
         '/api/workspace/joined',
         '/api/workspace/find-by-email',
+        '/api/integrations/slack/events',
+        '/api/integrations/slack/commands',
+        '/api/integrations/slack/interactivity',
       ];
 
       if (
         req.originalUrl.startsWith('/api') &&
-        !excludedPaths.some((path) => req.originalUrl.startsWith(path))
+        !excludedPaths.some((path) => req.originalUrl.startsWith(path)) &&
+        !OAUTH_CALLBACK_PATH.test(req.originalUrl)
       ) {
         if (!req.raw?.['workspaceId'] && req.originalUrl !== '/api') {
           throw new NotFoundException('Workspace not found');
@@ -143,7 +162,8 @@ async function bootstrap() {
 
   app.enableCors();
   app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
-  app.enableShutdownHooks();
+  // the signal Nest re-raises by default is ignored when node runs as PID 1
+  app.enableShutdownHooks([], { useProcessExit: true });
 
   const logger = new Logger('NestApplication');
 

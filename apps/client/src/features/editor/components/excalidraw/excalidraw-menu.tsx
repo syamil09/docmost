@@ -1,6 +1,7 @@
 import { BubbleMenu as BaseBubbleMenu } from "@tiptap/react/menus";
 import { findParentNode, posToDOMRect, useEditorState } from "@tiptap/react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSetAtom } from "jotai";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { isEditorReady } from "@docmost/editor-ext";
 import {
@@ -25,6 +26,7 @@ import {
   IconDownload,
   IconEdit,
   IconTrash,
+  IconZoomIn,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { getFileUrl } from "@/lib/config.ts";
@@ -37,6 +39,8 @@ import ReactClearModal from "react-clear-modal";
 import { useHandleLibrary } from "@excalidraw/excalidraw";
 import { localStorageLibraryAdapter } from "@/features/editor/components/excalidraw/excalidraw-utils.ts";
 import { useAltTextControl } from "@/features/editor/components/common/use-alt-text-control.tsx";
+import { notifyDiagramSaveError } from "@/features/editor/components/common/diagram-save-error";
+import { lightboxRequestAtom } from "@/features/editor/atoms/editor-atoms";
 import classes from "../common/toolbar-menu.module.css";
 
 const ExcalidrawComponent = lazy(() =>
@@ -47,6 +51,7 @@ const ExcalidrawComponent = lazy(() =>
 
 export function ExcalidrawMenu({ editor }: EditorMenuProps) {
   const { t } = useTranslation();
+  const setLightboxRequest = useSetAtom(lightboxRequestAtom);
   const [opened, { open, close }] = useDisclosure(false);
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI>(null);
@@ -198,15 +203,18 @@ export function ExcalidrawMenu({ editor }: EditorMenuProps) {
     setIsSaving(true);
 
     try {
-      const { exportToSvg } = await import("@excalidraw/excalidraw");
+      const { exportScene } = await import("@excalidraw/excalidraw");
 
-      const svg = await exportToSvg({
-        elements: excalidrawAPI?.getSceneElements(),
-        appState: {
-          exportEmbedScene: true,
-          exportWithDarkMode: false,
+      const svg = await exportScene({
+        type: "svg",
+        data: {
+          elements: excalidrawAPI?.getSceneElements(),
+          files: excalidrawAPI?.getFiles(),
         },
-        files: excalidrawAPI?.getFiles(),
+        config: {
+          embedScene: true,
+          theme: "light",
+        },
       });
 
       const serializer = new XMLSerializer();
@@ -249,8 +257,9 @@ export function ExcalidrawMenu({ editor }: EditorMenuProps) {
     try {
       await saveData();
       close();
-    } catch {
+    } catch (err) {
       // save failed, modal stays open
+      notifyDiagramSaveError(err);
     }
   }, [saveData, close]);
 
@@ -359,6 +368,23 @@ export function ExcalidrawMenu({ editor }: EditorMenuProps) {
 
           <div className={classes.divider} />
 
+          <Tooltip position="top" label={t("Expand")} withinPortal={false}>
+            <ActionIcon
+              onClick={() =>
+                editorState?.src &&
+                setLightboxRequest({
+                  src: getFileUrl(editorState.src),
+                  type: "image",
+                })
+              }
+              size="lg"
+              aria-label={t("Expand")}
+              variant="subtle"
+            >
+              <IconZoomIn size={18} />
+            </ActionIcon>
+          </Tooltip>
+
           <Tooltip position="top" label={t("Edit")} withinPortal={false}>
             <ActionIcon
               onClick={handleOpen}
@@ -428,7 +454,7 @@ export function ExcalidrawMenu({ editor }: EditorMenuProps) {
         <div style={{ height: "90vh" }}>
           <Suspense fallback={null}>
             <ExcalidrawComponent
-              excalidrawAPI={(api) => setExcalidrawAPI(api)}
+              onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
               onChange={(elements, _appState, files) => {
                 const fingerprint = `${elements.length}:${elements.reduce((s, e) => s + (e.version || 0), 0)}:${Object.keys(files).length}`;
                 if (isInitialLoadRef.current) {

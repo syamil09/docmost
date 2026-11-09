@@ -20,8 +20,9 @@ import {
 import { Node } from '@tiptap/pm/model';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
-import { updateAttachmentAttr } from './share.util';
+import { updateAttachmentAttr, updateAttachmentUrl } from './share.util';
 import { Page } from '@docmost/db/types/entity.types';
+import { getCoverAttachmentId } from '../page/page-cover.utils';
 import { validate as isValidUUID } from 'uuid';
 import { sql } from 'kysely';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
@@ -46,8 +47,9 @@ export class ShareService {
       throw new NotFoundException('Share not found');
     }
 
-    const isRestricted =
-      await this.pagePermissionRepo.hasRestrictedAncestor(share.pageId);
+    const isRestricted = await this.pagePermissionRepo.hasRestrictedAncestor(
+      share.pageId,
+    );
     if (isRestricted) {
       throw new NotFoundException('Share not found');
     }
@@ -109,30 +111,44 @@ export class ShareService {
     }
   }
 
-  async getSharedPage(dto: ShareInfoDto, workspaceId: string) {
+  async getSharedPage(
+    dto: ShareInfoDto,
+    workspaceId: string,
+    opts?: { includeContent?: boolean },
+  ) {
+    //TODO: we should resolve the page from the share id
+    if (!dto.pageId) throw new NotFoundException('Shared page not found');
+
     const share = await this.getShareForPage(dto.pageId, workspaceId);
 
     if (!share) {
       throw new NotFoundException('Shared page not found');
     }
 
-    const page = await this.pageRepo.findById(dto.pageId, {
-      includeContent: true,
-      includeCreator: true,
-    });
+    const includeContent = opts?.includeContent !== false;
+    const page = includeContent
+      ? await this.pageRepo.findById(dto.pageId, {
+          includeContent: true,
+          includeCreator: true,
+        })
+      : await this.pageRepo.findById(dto.pageId);
 
     if (!page || page.deletedAt) {
       throw new NotFoundException('Shared page not found');
     }
 
     // Block access to restricted pages
-    const isRestricted =
-      await this.pagePermissionRepo.hasRestrictedAncestor(page.id);
+    const isRestricted = await this.pagePermissionRepo.hasRestrictedAncestor(
+      page.id,
+    );
     if (isRestricted) {
       throw new NotFoundException('Shared page not found');
     }
 
-    page.content = await this.updatePublicAttachments(page);
+    if (includeContent) {
+      page.content = await this.updatePublicAttachments(page);
+      page.coverPhoto = await this.updatePublicCoverPhoto(page);
+    }
 
     return { page, share };
   }
@@ -360,35 +376,9 @@ export class ShareService {
       workspaceId,
     );
 
-    // Sanitize each item's content for public delivery
-    // generate per-attachment tokens scoped to the source page
-    // and strip comment marks.
-    const tokenized = await Promise.all(
-      items.map(async (item) => {
-        if ('status' in item) return item;
-        const doc = await this.prepareContentForShare(
-          item.content,
-          item.sourcePageId,
-          workspaceId,
-        );
-        return { ...item, content: doc?.toJSON() ?? item.content };
-      }),
-    );
-
-    // Collapse `not_found` to `no_access` for share viewers so the response
-    // can't be used to tell "page is shared but transclusion id doesn't
-    // match" from "page isn't shared at all".
-    const sanitized = tokenized.map((item) =>
-      'status' in item && item.status === 'not_found'
-        ? {
-            sourcePageId: item.sourcePageId,
-            transclusionId: item.transclusionId,
-            status: 'no_access' as const,
-          }
-        : item,
-    );
-
-    return { items: sanitized };
+    return {
+      items: await this.sanitizeTransclusionItemsForPublic(items, workspaceId),
+    };
   }
 
   async isSharingAllowed(
@@ -423,6 +413,50 @@ export class ShareService {
       page.workspaceId,
     );
     return doc?.toJSON() ?? page.content;
+  }
+
+  async updatePublicCoverPhoto(page: Page): Promise<string | null> {
+    const attachmentId = getCoverAttachmentId(page.coverPhoto);
+    if (!attachmentId) return page.coverPhoto;
+
+    const token = await this.tokenService.generateAttachmentToken({
+      attachmentId,
+      pageId: page.id,
+      workspaceId: page.workspaceId,
+    });
+    return updateAttachmentUrl(page.coverPhoto, token);
+  }
+
+  /**
+   * Sanitization tail shared by every public transclusion surface: tokenize
+   * each content item against its source page, then hide lookup misses.
+   */
+  async sanitizeTransclusionItemsForPublic(
+    items: TransclusionLookup[],
+    workspaceId: string,
+  ): Promise<TransclusionLookup[]> {
+    const tokenized = await Promise.all(
+      items.map(async (item) => {
+        if ('status' in item) return item;
+        const doc = await this.prepareContentForShare(
+          item.content,
+          item.sourcePageId,
+          workspaceId,
+        );
+        return { ...item, content: doc?.toJSON() ?? item.content };
+      }),
+    );
+
+    // Collapse not_found to no_access so hidden sources are indistinguishable from missing ids.
+    return tokenized.map((item) =>
+      'status' in item && item.status === 'not_found'
+        ? {
+            sourcePageId: item.sourcePageId,
+            transclusionId: item.transclusionId,
+            status: 'no_access' as const,
+          }
+        : item,
+    );
   }
 
   /**

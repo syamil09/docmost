@@ -112,14 +112,14 @@ export class UserRepo {
   async insertUser(
     insertableUser: InsertableUser,
     trx?: KyselyTransaction,
-    opts?: { pageEditMode?: string },
+    opts?: { pageEditMode?: string; locale?: string },
   ): Promise<User> {
     const user: InsertableUser = {
       name:
         insertableUser.name || insertableUser.email.split('@')[0].toLowerCase(),
       email: insertableUser.email.toLowerCase(),
       password: await hashPassword(insertableUser.password),
-      locale: 'en-US',
+      locale: opts?.locale ?? 'en-US',
       role: insertableUser?.role,
       lastLoginAt: new Date(),
     };
@@ -145,12 +145,16 @@ export class UserRepo {
   async roleCountByWorkspaceId(
     role: string,
     workspaceId: string,
+    trx?: KyselyTransaction,
   ): Promise<number> {
-    const { count } = await this.db
+    const db = dbOrTx(this.db, trx);
+    const { count } = await db
       .selectFrom('users')
       .select((eb) => eb.fn.count('role').as('count'))
       .where('role', '=', role)
       .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
 
     return count as number;

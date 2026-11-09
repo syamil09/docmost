@@ -5,11 +5,13 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   Inject,
   Logger,
   NotFoundException,
   Param,
+  PayloadTooLargeException,
   Post,
   Query,
   Req,
@@ -24,6 +26,7 @@ import * as bytes from 'bytes';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OAuthScope } from '../../common/decorators/oauth-scope.decorator';
 import { Attachment, User, Workspace } from '@docmost/db/types/entity.types';
 import { StorageService } from '../../integrations/storage/storage.service';
 import {
@@ -55,6 +58,7 @@ import { JwtAttachmentPayload, JwtType } from '../auth/dto/jwt-payload';
 import * as path from 'path';
 import {
   AttachmentInfoDto,
+  DeleteAttachmentDto,
   PageIdDto,
   RemoveIconDto,
 } from './dto/attachment.dto';
@@ -105,7 +109,7 @@ export class AttachmentController {
     } catch (err: any) {
       this.logger.error(err.message);
       if (err?.statusCode === 413) {
-        throw new BadRequestException(
+        throw new PayloadTooLargeException(
           `File too large. Exceeds the ${this.environmentService.getFileUploadSizeLimit()} limit`,
         );
       }
@@ -136,6 +140,13 @@ export class AttachmentController {
       throw new BadRequestException('Invalid attachment id');
     }
 
+    const type = file.fields?.type?.value;
+    const isCover = type === AttachmentType.PageCover;
+    const isFile = type === undefined || type === AttachmentType.File;
+    if ((!isFile && !isCover) || (isCover && attachmentId)) {
+      throw new BadRequestException('Invalid attachment type');
+    }
+
     try {
       const fileResponse = await this.attachmentService.uploadFile({
         filePromise: file,
@@ -144,6 +155,7 @@ export class AttachmentController {
         userId: user.id,
         workspaceId: workspace.id,
         attachmentId: attachmentId,
+        type: isCover ? AttachmentType.PageCover : AttachmentType.File,
       });
 
       this.auditService.log({
@@ -163,10 +175,14 @@ export class AttachmentController {
         url: this.buildFileUrl(workspace, fileResponse),
       });
     } catch (err: any) {
+      // cover uploads tell the user why they were refused
+      if (isCover && err instanceof HttpException) {
+        throw err;
+      }
       if (err?.statusCode === 413) {
         const errMessage = `File too large. Exceeds the ${this.environmentService.getFileUploadSizeLimit()} limit`;
         this.logger.error(errMessage);
-        throw new BadRequestException(errMessage);
+        throw new PayloadTooLargeException(errMessage);
       }
       this.logger.error(err);
       throw new BadRequestException('Error processing file upload.');
@@ -175,6 +191,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @Get('/files/:fileId/:fileName')
+  @OAuthScope('read')
   async getFile(
     @Req() req: FastifyRequest,
     @Res() res: FastifyReply,
@@ -287,7 +304,7 @@ export class AttachmentController {
       });
     } catch (err: any) {
       if (err?.statusCode === 413) {
-        throw new BadRequestException(
+        throw new PayloadTooLargeException(
           `File too large. Exceeds the ${MAX_AVATAR_SIZE} limit`,
         );
       }
@@ -306,7 +323,8 @@ export class AttachmentController {
 
     if (
       !validAttachmentTypes.includes(attachmentType) ||
-      attachmentType === AttachmentType.File
+      attachmentType === AttachmentType.File ||
+      attachmentType === AttachmentType.PageCover
     ) {
       throw new BadRequestException('Invalid image attachment type');
     }
@@ -347,6 +365,11 @@ export class AttachmentController {
 
       return res.send(fileResponse);
     } catch (err: any) {
+      if (err?.statusCode === 413) {
+        throw new PayloadTooLargeException(
+          `File too large. Exceeds the ${MAX_AVATAR_SIZE} limit`,
+        );
+      }
       this.logger.error(err);
       throw new BadRequestException('Error processing file upload.');
     }
@@ -361,7 +384,8 @@ export class AttachmentController {
   ) {
     if (
       !validAttachmentTypes.includes(attachmentType) ||
-      attachmentType === AttachmentType.File
+      attachmentType === AttachmentType.File ||
+      attachmentType === AttachmentType.PageCover
     ) {
       throw new BadRequestException('Invalid image attachment type');
     }
@@ -427,6 +451,7 @@ export class AttachmentController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('pages/attachments')
+  @OAuthScope('read')
   async getPageAttachments(
     @Body() dto: PageIdDto,
     @Body() pagination: PaginationOptions,
@@ -452,6 +477,58 @@ export class AttachmentController {
         url: this.buildFileUrl(workspace, attachment),
       })),
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('attachments/delete')
+  async deleteAttachment(
+    @Body() dto: DeleteAttachmentDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const attachment = await this.attachmentRepo.findById(dto.attachmentId);
+    if (
+      !attachment ||
+      !attachment.pageId ||
+      attachment.workspaceId !== workspace.id ||
+      attachment.type !== AttachmentType.File
+    ) {
+      throw new NotFoundException('File not found');
+    }
+
+    const page = await this.pageRepo.findById(attachment.pageId);
+    if (!page) {
+      throw new NotFoundException('File not found');
+    }
+
+    await this.pageAccessService.validateCanEdit(page, user);
+
+    const spaceAbility = await this.spaceAbility.createForUser(
+      user,
+      page.spaceId,
+    );
+    if (
+      spaceAbility.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)
+    ) {
+      throw new ForbiddenException('Only space admins can delete files');
+    }
+
+    await this.attachmentService.deleteAttachment(attachment);
+
+    this.auditService.log({
+      event: AuditEvent.ATTACHMENT_DELETED,
+      resourceType: AuditResource.ATTACHMENT,
+      resourceId: attachment.id,
+      spaceId: page.spaceId,
+      changes: {
+        before: {
+          fileName: attachment.fileName,
+          pageId: page.id,
+          creatorId: attachment.creatorId,
+        },
+      },
+    });
   }
 
   @UseGuards(JwtAuthGuard)

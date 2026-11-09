@@ -8,6 +8,8 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { Workspace } from '@docmost/db/types/entity.types';
 import { htmlEscape } from '../../common/helpers/html-escaper';
+import { getWorkspaceDefaultLocale } from '../workspace/workspace.util';
+import { DEFAULT_LOCALE } from '../workspace/workspace.constants';
 
 @Controller('share')
 export class ShareSeoController {
@@ -60,16 +62,28 @@ export class ShareSeoController {
 
       const pageId = this.extractPageSlugId(pageSlug);
 
-      const share = await this.shareService.getShareForPage(
-        pageId,
-        workspace.id,
-      );
-
-      if (!share) {
+      let title: string;
+      let searchIndexing = false;
+      try {
+        const shared = await this.shareService.getSharedPage(
+          { pageId },
+          workspace.id,
+          { includeContent: false },
+        );
+        const sharingAllowed = await this.shareService.isSharingAllowed(
+          workspace.id,
+          shared.share.spaceId,
+        );
+        if (!sharingAllowed) {
+          return this.sendIndex(indexFilePath, res);
+        }
+        title = shared.page.title;
+        searchIndexing = shared.share.searchIndexing;
+      } catch (err) {
         return this.sendIndex(indexFilePath, res);
       }
 
-      const rawTitle = htmlEscape(share?.sharedPage.title ?? 'untitled');
+      const rawTitle = htmlEscape(title ?? 'untitled');
       const metaTitle =
         rawTitle.length > 80 ? `${rawTitle.slice(0, 77)}…` : rawTitle;
 
@@ -78,15 +92,18 @@ export class ShareSeoController {
       const metaTags = [
         `<meta property="og:title" content="${metaTitle}" />`,
         `<meta property="twitter:title" content="${metaTitle}" />`,
-        !share.searchIndexing ? `<meta name="robots" content="noindex" />` : '',
+        !searchIndexing ? `<meta name="robots" content="noindex" />` : '',
       ]
         .filter(Boolean)
         .join('\n    ');
 
+      const lang = getWorkspaceDefaultLocale(workspace) ?? DEFAULT_LOCALE;
+
       const html = fs.readFileSync(indexFilePath, 'utf8');
       const transformedHtml = html
-        .replace(/<title>[\s\S]*?<\/title>/i, `<title>${metaTitle}</title>`)
-        .replace(metaTagVar, metaTags);
+        .replace(/<html lang="[^"]*"/i, () => `<html lang="${lang}"`)
+        .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${metaTitle}</title>`)
+        .replace(metaTagVar, () => metaTags);
 
       res.type('text/html').send(transformedHtml);
     }

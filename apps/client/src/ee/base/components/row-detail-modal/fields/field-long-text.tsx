@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Textarea } from "@mantine/core";
+import { useDebouncedCallback } from "@mantine/hooks";
 import { FieldProps, FieldShell } from "./detail-field";
 import classes from "@/ee/base/styles/row-detail-modal.module.css";
+import { AUTOSAVE_DELAY_MS } from "@/ee/base/constants/autosave";
 
 const toText = (value: unknown) => (typeof value === "string" ? value : "");
 const normalize = (s: string) => {
@@ -9,26 +11,31 @@ const normalize = (s: string) => {
   return trimmed.length ? trimmed : null;
 };
 
-export function FieldLongText({ property, value, readOnly, onChange }: FieldProps) {
+export function FieldLongText({
+  property,
+  value,
+  readOnly,
+  onChange,
+  onEditingChange,
+}: FieldProps) {
   const text = toText(value);
   const [draft, setDraft] = useState(text);
   const [focused, setFocused] = useState(false);
-  // Esc sets this; blur() then runs commit synchronously with the stale
-  // draft, so the revert must be decided here, not via setDraft.
-  const cancelRef = useRef(false);
 
   useEffect(() => {
     if (!focused) setDraft(text);
   }, [text, focused]);
 
+  const save = () => {
+    if (normalize(draft) !== normalize(text)) onChange(normalize(draft));
+  };
+  const autosave = useDebouncedCallback(save, AUTOSAVE_DELAY_MS);
+
   const commit = () => {
     setFocused(false);
-    if (cancelRef.current) {
-      cancelRef.current = false;
-      setDraft(text);
-      return;
-    }
-    if (normalize(draft) !== normalize(text)) onChange(normalize(draft));
+    onEditingChange?.(false);
+    autosave.cancel();
+    save();
   };
 
   if (readOnly) {
@@ -50,12 +57,17 @@ export function FieldLongText({ property, value, readOnly, onChange }: FieldProp
         className={classes.fieldTextarea}
         classNames={{ input: classes.fieldTextareaInput }}
         value={draft}
-        onFocus={() => setFocused(true)}
-        onChange={(e) => setDraft(e.currentTarget.value)}
+        onFocus={() => {
+          setFocused(true);
+          onEditingChange?.(true);
+        }}
+        onChange={(e) => {
+          setDraft(e.currentTarget.value);
+          autosave();
+        }}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
-            cancelRef.current = true;
             e.currentTarget.blur();
           } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
             e.preventDefault();

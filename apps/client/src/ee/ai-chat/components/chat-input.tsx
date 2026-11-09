@@ -1,4 +1,12 @@
-import { useCallback, useId, useRef, useEffect, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useEffect,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { IconArrowUp, IconPaperclip, IconPlayerStopFilled, IconX, IconFile, IconPhoto, IconPlus, IconAt, IconFileText } from "@tabler/icons-react";
 import { Popover } from "@mantine/core";
@@ -33,6 +41,10 @@ type Props = {
   variant?: "card" | "flat";
   showDisclaimer?: boolean;
   chatId?: string;
+};
+
+export type ChatInputHandle = {
+  prefill: (text: string) => void;
 };
 
 function extractMentions(json: any): PageMention[] {
@@ -89,7 +101,7 @@ function editorJsonToText(json: any): string {
   return text;
 }
 
-export default function ChatInput({
+const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   isStreaming,
   onSend,
   onStop,
@@ -100,7 +112,7 @@ export default function ChatInput({
   variant = "card",
   showDisclaimer = true,
   chatId,
-}: Props) {
+}: Props, ref) {
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;
   const { t } = useTranslation();
@@ -176,22 +188,7 @@ export default function ChatInput({
     setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  const handleSubmit = useCallback(() => {
-    if (!editor || editor.isDestroyed || isStreaming) return;
-    const json = editor.getJSON();
-    const text = editorJsonToText(json).trim();
-    const readyAttachments = pendingAttachments.filter((a) => !a.uploading);
-    if (!text && readyAttachments.length === 0) return;
-
-    const mentions = extractMentions(json);
-    onSendRef.current(text, mentions, readyAttachments);
-    editor.commands.clearContent();
-    editor.commands.focus();
-    setPendingAttachments([]);
-  }, [isStreaming, pendingAttachments]);
-
-  const handleSubmitRef = useRef(handleSubmit);
-  handleSubmitRef.current = handleSubmit;
+  const handleSubmitRef = useRef<() => void>(() => {});
 
   const editor = useEditor({
     extensions: [
@@ -264,11 +261,40 @@ export default function ChatInput({
     },
   });
 
+  const handleSubmit = useCallback(() => {
+    if (!editor || editor.isDestroyed || isStreaming) return;
+    const json = editor.getJSON();
+    const text = editorJsonToText(json).trim();
+    const readyAttachments = pendingAttachments.filter((a) => !a.uploading);
+    if (!text && readyAttachments.length === 0) return;
+
+    const mentions = extractMentions(json);
+    onSendRef.current(text, mentions, readyAttachments);
+    editor.commands.clearContent();
+    editor.commands.focus();
+    setPendingAttachments([]);
+  }, [editor, isStreaming, pendingAttachments]);
+
+  handleSubmitRef.current = handleSubmit;
+
   useEffect(() => {
     if (editor && !editor.isDestroyed && autofocus) {
       editor.commands.focus();
     }
   }, [editor]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      prefill: (text: string) => {
+        if (!editor || editor.isDestroyed) return;
+        editor.commands.clearContent();
+        editor.commands.insertContent(text);
+        editor.commands.focus();
+      },
+    }),
+    [editor],
+  );
 
   const hasContent = !isEmpty || pendingAttachments.some((a) => !a.uploading) || (contextPages?.length ?? 0) > 0;
 
@@ -429,4 +455,6 @@ export default function ChatInput({
     )}
     </>
   );
-}
+});
+
+export default ChatInput;

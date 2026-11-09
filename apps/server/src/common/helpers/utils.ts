@@ -2,7 +2,6 @@ import * as path from 'path';
 import * as bcrypt from 'bcrypt';
 import sanitize = require('sanitize-filename');
 import { FastifyRequest } from 'fastify';
-import { Readable, Transform } from 'stream';
 
 export const envPath = path.resolve(process.cwd(), '..', '..', '.env');
 
@@ -28,15 +27,25 @@ export type RedisConfig = {
   host: string;
   port: number;
   db: number;
+  username?: string;
   password?: string;
   family?: number;
+  tls?: { rejectUnauthorized?: boolean };
 };
 
 export function parseRedisUrl(redisUrl: string): RedisConfig {
-  // format - redis[s]://[[username][:password]@][host][:port][/db-number][?family=4|6]
+  // format - redis[s]://[[username][:password]@][host][:port][/db-number][?family=4|6][&rejectUnauthorized=false]
   const url = new URL(redisUrl);
-  const { hostname, port, password, pathname, searchParams } = url;
-  const portInt = parseInt(port, 10);
+  const {
+    hostname,
+    port,
+    username,
+    password,
+    pathname,
+    protocol,
+    searchParams,
+  } = url;
+  const portInt = port ? parseInt(port, 10) : 6379;
 
   let db: number = 0;
   // extract db value if present
@@ -54,7 +63,22 @@ export function parseRedisUrl(redisUrl: string): RedisConfig {
     family = parseInt(familyParam, 10);
   }
 
-  return { host: hostname, port: portInt, password, db, family };
+  const tls =
+    protocol === 'rediss:'
+      ? searchParams.get('rejectUnauthorized') === 'false'
+        ? { rejectUnauthorized: false }
+        : {}
+      : undefined;
+
+  return {
+    host: hostname,
+    port: portInt,
+    username: username ? decodeURIComponent(username) : undefined,
+    password: password ? decodeURIComponent(password) : undefined,
+    db,
+    family,
+    tls,
+  };
 }
 
 export function createRetryStrategy() {
@@ -164,7 +188,7 @@ export function isUserDisabled(user: {
   return !!(user.deactivatedAt || user.deletedAt);
 }
 
-const SENSITIVE_URL_PREFIXES = ['/api/sso/'];
+const SENSITIVE_URL_PREFIXES = ['/api/sso/', '/api/integrations/oauth/'];
 
 export function redactSensitiveUrl(url: string): string {
   if (url && SENSITIVE_URL_PREFIXES.some((prefix) => url.includes(prefix))) {
@@ -174,19 +198,4 @@ export function redactSensitiveUrl(url: string): string {
     }
   }
   return url;
-}
-
-export function createByteCountingStream(source: Readable) {
-  let bytesRead = 0;
-  const stream = new Transform({
-    transform(chunk, encoding, callback) {
-      bytesRead += chunk.length;
-      callback(null, chunk);
-    },
-  });
-
-  source.pipe(stream);
-  source.on('error', (err) => stream.emit('error', err));
-
-  return { stream, getBytesRead: () => bytesRead };
 }

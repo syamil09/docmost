@@ -18,9 +18,14 @@ import { PageAccessModule } from './page/page-access/page-access.module';
 import { DomainMiddleware } from '../common/middlewares/domain.middleware';
 import { AuditContextMiddleware } from '../common/middlewares/audit-context.middleware';
 import { ShareModule } from './share/share.module';
+import { PublicSpaceModule } from './public-space/public-space.module';
 import { LabelModule } from './label/label.module';
 import { NotificationModule } from './notification/notification.module';
 import { WatcherModule } from './watcher/watcher.module';
+import { IntegrationModule } from './integration/integration.module';
+import { GitHubModule } from './integration/providers/github/github.module';
+import { FigmaModule } from './integration/providers/figma/figma.module';
+import { LinearModule } from './integration/providers/linear/linear.module';
 import { FavoriteModule } from './favorite/favorite.module';
 import { SessionModule } from './session/session.module';
 import { ClsMiddleware } from 'nestjs-cls';
@@ -40,9 +45,14 @@ import { ClsMiddleware } from 'nestjs-cls';
     CaslModule,
     PageAccessModule,
     ShareModule,
+    PublicSpaceModule,
     LabelModule,
     NotificationModule,
     WatcherModule,
+    IntegrationModule,
+    GitHubModule,
+    FigmaModule,
+    LinearModule,
     SessionModule,
   ],
 })
@@ -53,6 +63,7 @@ export class CoreModule implements NestModule {
       { path: 'health', method: RequestMethod.GET },
       { path: 'health/live', method: RequestMethod.GET },
       { path: 'billing/stripe/webhook', method: RequestMethod.POST },
+      { path: 'integrations/oauth/*/callback', method: RequestMethod.GET },
     ];
 
     consumer

@@ -23,6 +23,13 @@ export const Feature = {
   PERSONAL_SPACES: 'spaces:personal',
   DOCX_EXPORT: 'export:docx',
   BASES: 'bases',
+  INTEGRATIONS: 'integrations',
+  INTEGRATIONS_ADVANCED: 'integrations:advanced',
+  OAUTH: 'oauth',
+  AI_CONTROLS: 'ai:controls',
+  MCP_CONTROLS: 'mcp:controls',
+  PUBLIC_SPACE_APPEARANCE: 'public-space:appearance',
+  SIEM: 'siem',
 } as const;
 
 export type FeatureKey = (typeof Feature)[keyof typeof Feature];

@@ -19,12 +19,21 @@ import {
 } from "@/features/search/types/search.types";
 import DOMPurify from "dompurify";
 import { useTranslation } from "react-i18next";
+import { timeAgo } from "@/lib/time.ts";
 
 interface SearchResultItemProps {
   result: IPageSearch | IAttachmentSearch;
   isAttachmentResult: boolean;
   showSpace?: boolean;
 }
+
+// Spotlight hardcodes tabIndex={-1} after spreading props; a ref wins and
+// React never writes -1 back because the prop value never changes
+const makeActionTabbable = (el: HTMLElement | null) => {
+  if (el) {
+    el.tabIndex = 0;
+  }
+};
 
 export function SearchResultItem({
   result,
@@ -46,6 +55,7 @@ export function SearchResultItem({
     return (
       <Spotlight.Action
         component={Link}
+        ref={makeActionTabbable}
         //@ts-ignore
         to={buildPageUrl(
           attachmentResult.space.slug,
@@ -59,11 +69,33 @@ export function SearchResultItem({
             <IconFile size={16} />
           </Center>
 
-          <div style={{ flex: 1 }}>
-            <Text>{attachmentResult.fileName}</Text>
-            <Text size="xs" opacity={0.6}>
-              {attachmentResult.space.name} • {attachmentResult.page.title}
-            </Text>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Group justify="space-between" wrap="nowrap" gap="xs">
+              <Text truncate>{attachmentResult.fileName}</Text>
+              <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                {timeAgo(attachmentResult.updatedAt)}
+              </Text>
+            </Group>
+            <Group
+              justify="space-between"
+              wrap="nowrap"
+              gap="xs"
+              align="flex-start"
+            >
+              <Text size="xs" opacity={0.6} miw={0}>
+                {attachmentResult.space.name} • {attachmentResult.page.title}
+              </Text>
+              {showSpace && attachmentResult.space.archivedAt && (
+                <Badge
+                  variant="light"
+                  size="xs"
+                  color="gray"
+                  style={{ flexShrink: 0 }}
+                >
+                  {t("Archived")}
+                </Badge>
+              )}
+            </Group>
 
             {attachmentResult?.highlight && (
               <Text
@@ -96,24 +128,40 @@ export function SearchResultItem({
     return (
       <Spotlight.Action
         component={Link}
+        ref={makeActionTabbable}
         //@ts-ignore
         to={buildPageUrl(
           pageResult.space.slug,
           pageResult.slugId,
           pageResult.title,
+          undefined,
+          pageResult.matchedText,
+          pageResult.wholeWord
         )}
         style={{ userSelect: "none" }}
       >
         <Group wrap="nowrap" w="100%">
           <Center>{getPageIcon(pageResult?.icon)}</Center>
 
-          <div style={{ flex: 1 }}>
-            <Text>{pageResult.title}</Text>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Group justify="space-between" wrap="nowrap" gap="xs">
+              <Text truncate>{pageResult.title || t("Untitled")}</Text>
+              <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                {timeAgo(pageResult.updatedAt)}
+              </Text>
+            </Group>
 
             {showSpace && pageResult.space && (
-              <Badge variant="light" size="xs" color="gray">
-                {pageResult.space.name}
-              </Badge>
+              <Group justify="space-between" gap="xs">
+                <Badge variant="light" size="xs" color="gray">
+                  {pageResult.space.name}
+                </Badge>
+                {pageResult.space.archivedAt && (
+                  <Badge variant="light" size="xs" color="gray">
+                    {t("Archived")}
+                  </Badge>
+                )}
+              </Group>
             )}
 
             {pageResult?.highlight && (

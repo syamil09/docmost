@@ -13,19 +13,18 @@ export function updateAttachmentAttr(
   if (!match) return;
 
   // @ts-ignore
-  node.attrs[attr] = updateAttachmentUrl(attrVal, match[0], token);
+  node.attrs[attr] = updateAttachmentUrl(attrVal, token, match[0]);
 }
 
-function updateAttachmentUrl(
+export function updateAttachmentUrl(
   src: string,
-  matchedFilesSegment: string,
   jwtToken: string,
+  matchedFilesSegment?: string,
 ) {
-  const publicSegment = matchedFilesSegment.replace(
-    '/files/',
-    '/files/public/',
-  );
-  const updatedSrc = src.replace(matchedFilesSegment, publicSegment);
+  const segment = matchedFilesSegment ?? src.match(FILES_PATH_REGEX)?.[0];
+  const updatedSrc = segment
+    ? src.replace(segment, segment.replace('/files/', '/files/public/'))
+    : src.replace('/files/', '/files/public/');
   const separator = updatedSrc.includes('?') ? '&' : '?';
   return `${updatedSrc}${separator}jwt=${jwtToken}`;
 }

@@ -1,7 +1,7 @@
 import { Spotlight } from "@mantine/spotlight";
 import { IconSearch, IconSparkles } from "@tabler/icons-react";
-import { Group, Button, VisuallyHidden } from "@mantine/core";
-import React, { useState, useMemo, useEffect } from "react";
+import { Group, Button, VisuallyHidden, Text } from "@mantine/core";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
@@ -30,11 +30,18 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   const [debouncedSearchQuery] = useDebouncedValue(query, 300);
   const [filters, setFilters] = useState<{
     spaceId?: string | null;
+    spaceArchived?: boolean;
     contentType?: string;
+    creatorId?: string | null;
+    labelIds?: string[];
+    titleOnly?: boolean;
+    includeArchived?: boolean;
   }>({
     contentType: "page",
   });
   const [isAiMode, setIsAiMode] = useState(false);
+  const isArchivedSpaceSelected = !!filters.spaceArchived;
+  const archivedAiNote = t("AI answers don't cover archived spaces.");
 
   // Build unified search params
   const searchParams = useMemo(() => {
@@ -48,10 +55,29 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
       params.spaceId = filters.spaceId;
     }
 
+    if (filters.creatorId) {
+      params.creatorId = filters.creatorId;
+    }
+
+    if (filters.labelIds?.length) {
+      params.labelIds = filters.labelIds;
+    }
+
+    if (filters.titleOnly) {
+      params.titleOnly = true;
+    }
+
+    if (filters.includeArchived) {
+      params.includeArchived = true;
+    }
+
     return params;
   }, [debouncedSearchQuery, filters]);
 
-  const { data: searchResults, isLoading } = useUnifiedSearch(
+  const {
+    data: searchResults,
+    isFetching,
+  } = useUnifiedSearch(
     searchParams,
     !isAiMode // Disable regular search when in AI mode
   );
@@ -88,6 +114,11 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     }
   }, [aiSearchError, t]);
 
+  const isFilterBrowse =
+    (filters.labelIds?.length ?? 0) > 0 || !!filters.creatorId;
+  // while the debounce is pending the empty list is not a settled "no results"
+  const isQuerySettled = query === debouncedSearchQuery;
+
   // Determine result type for rendering
   const isAttachmentSearch =
     filters.contentType === "attachment" && hasAttachmentIndexing;
@@ -110,16 +141,16 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     }
   };
 
-  const handleFiltersChange = (newFilters: any) => {
+  const handleFiltersChange = useCallback((newFilters: any) => {
     setFilters(newFilters);
-  };
+  }, [setFilters]);
 
   const handleAskClick = () => {
     setIsAiMode(!isAiMode);
   };
 
   const handleAiSearchTrigger = () => {
-    if (query.trim() && isAiMode) {
+    if (query.trim() && isAiMode && !isArchivedSpaceSelected) {
       triggerAiSearchMutation(searchParams);
     }
   };
@@ -156,7 +187,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
               size="xs"
               leftSection={<IconSparkles size={16} />}
               onClick={handleAiSearchTrigger}
-              disabled={!query.trim()}
+              disabled={!query.trim() || isArchivedSpaceSelected}
               loading={isAiLoading}
             >
               Ask
@@ -179,10 +210,12 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
 
         <VisuallyHidden role="status" aria-live="polite">
           {isAiMode
-            ? query.length > 0 && !isAiLoading && !aiSearchResult
-              ? t("No answer available")
-              : ""
-            : query.length > 0 && !isLoading
+            ? isArchivedSpaceSelected
+              ? archivedAiNote
+              : query.length > 0 && !isAiLoading && !aiSearchResult
+                ? t("No answer available")
+                : ""
+            : (query.length > 0 || isFilterBrowse) && !isFetching
               ? resultItems.length === 0
                 ? t("No results found")
                 : t("{{count}} results found", { count: resultItems.length })
@@ -190,7 +223,13 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
         </VisuallyHidden>
 
         <Spotlight.ActionsList>
-          {isAiMode ? (
+          {isAiMode && isArchivedSpaceSelected ? (
+            <Spotlight.Empty>
+              <Text size="sm" c="dimmed">
+                {archivedAiNote}
+              </Text>
+            </Spotlight.Empty>
+          ) : isAiMode ? (
             <>
               {query.length === 0 && (
                 <Spotlight.Empty>{t("Ask a question...")}</Spotlight.Empty>
@@ -209,15 +248,28 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
             </>
           ) : (
             <>
-              {query.length === 0 && resultItems.length === 0 && (
+              {query.length === 0 && !isFilterBrowse && resultItems.length === 0 && (
                 <Spotlight.Empty>{t("Start typing to search...")}</Spotlight.Empty>
               )}
 
-              {query.length > 0 && !isLoading && resultItems.length === 0 && (
-                <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
-              )}
+              {(query.length > 0 || isFilterBrowse) &&
+                !isFetching &&
+                isQuerySettled &&
+                resultItems.length === 0 && (
+                  <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
+                )}
 
               {resultItems.length > 0 && <>{resultItems}</>}
+
+              {(query.length > 0 || isFilterBrowse) &&
+                isFetching &&
+                resultItems.length === 0 && (
+                <Spotlight.Empty>
+                  <Text size="sm" style={{ marginTop: 10 }}>
+                    {t("Searching...")}
+                  </Text>
+                </Spotlight.Empty>
+              )}
             </>
           )}
         </Spotlight.ActionsList>

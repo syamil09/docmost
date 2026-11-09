@@ -1,9 +1,10 @@
 .filtersContainer {
   display: flex;
   gap: 8px;
-  overflow-x: auto;
   padding: 8px 0;
-  scrollbar-width: thin;
+  /* grow with the filters so the ScrollArea sees the overflow */
+  width: max-content;
+  min-width: 100%;
 }
 
 .filterButton {
@@ -15,5 +16,12 @@
   color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-6));
   &:hover {
     color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-6));
+  }
+}
+
+.filterButtonActive {
+  color: var(--mantine-color-blue-light-color);
+  &:hover {
+    color: var(--mantine-color-blue-light-color);
   }
 }

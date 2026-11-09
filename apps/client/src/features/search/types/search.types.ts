@@ -14,6 +14,8 @@ export interface IPageSearch {
   updatedAt: Date;
   rank: string;
   highlight: string;
+  matchedText: string[];
+  wholeWord: boolean;
   space: Partial<ISpace>;
 }
 
@@ -36,6 +38,10 @@ export interface IPageSearchParams {
   query: string;
   spaceId?: string;
   shareId?: string;
+  creatorId?: string;
+  labelIds?: string[];
+  titleOnly?: boolean;
+  includeArchived?: boolean;
 }
 
 export interface IAttachmentSearch {
@@ -52,6 +58,7 @@ export interface IAttachmentSearch {
     name: string;
     slug: string;
     icon: string;
+    archivedAt?: Date | null;
   };
   page: {
     id: string;

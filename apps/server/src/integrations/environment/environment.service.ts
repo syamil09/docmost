@@ -203,6 +203,10 @@ export class EnvironmentService {
     return this.configService.get<string>('DRAWIO_URL');
   }
 
+  getUnsplashAccessKey(): string | undefined {
+    return this.configService.get<string>('UNSPLASH_ACCESS_KEY')?.trim() || undefined;
+  }
+
   isCloud(): boolean {
     const cloudConfig = this.configService
       .get<string>('CLOUD', 'false')
@@ -246,6 +250,13 @@ export class EnvironmentService {
       .get<string>('DISABLE_TELEMETRY', 'false')
       .toLowerCase();
     return disable === 'true';
+  }
+
+  isBetaPublicSpaces(): boolean {
+    const enabled = this.configService
+      .get<string>('BETA_PUBLIC_SPACES', 'false')
+      .toLowerCase();
+    return enabled === 'true';
   }
 
   getPostHogHost(): string {
@@ -384,5 +395,13 @@ export class EnvironmentService {
       .split(',')
       .map((o) => o.trim())
       .filter(Boolean);
+  }
+
+  getSlackSigningSecret(): string | undefined {
+    return this.configService.get<string>('INTEGRATION_SLACK_SIGNING_SECRET');
+  }
+
+  getAllowedPrivateNetworks(): string {
+    return this.configService.get<string>('ALLOWED_PRIVATE_NETWORKS', 'none');
   }
 }
