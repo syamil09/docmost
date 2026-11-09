@@ -35,6 +35,7 @@ vi.mock("@/features/comment/components/comment-menu", () => ({
 vi.mock("@/features/comment/queries/comment-query", () => ({
   useUpdateCommentMutation: () => ({ mutateAsync: vi.fn() }),
   useDeleteCommentMutation: () => ({ mutateAsync: vi.fn() }),
+  useResolveCommentMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/ee/hooks/use-feature", () => ({

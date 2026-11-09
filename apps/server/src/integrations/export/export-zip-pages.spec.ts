@@ -37,6 +37,7 @@ const buildService = (attachmentRows: any[]) => {
     storageService as any,
     {} as any,
     {} as any,
+    {} as any,
   );
   return { service, storageService };
 };
